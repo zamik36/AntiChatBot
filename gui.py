@@ -1,6 +1,6 @@
 # gui.py
 import tkinter as tk
-from tkinter import ttk, scrolledtext
+from tkinter import ttk, scrolledtext, messagebox # Добавили messagebox
 import json
 import threading # Для запуска логики чата в отдельном потоке
 import chat_logic # Импортируем нашу логику чата
@@ -9,119 +9,168 @@ from queue import Queue # Для безопасной передачи сооб�
 from threading import Event
 
 class ChatBotApp:
-    def __init__(self, root, config):
+    def __init__(self, root, config_sites, config_redis):
         self.root = root
-        self.config = config
-        self.sites = list(config.keys()) # Получаем список сайтов из конфига
+        self.config_sites = config_sites # Конфигурация сайтов
+        self.config_redis = config_redis # Конфигурация Redis
+        self.sites = list(config_sites.keys()) if config_sites else []
 
         # Потокобезопасная очередь для статуса
         self.status_queue = Queue()
         # Событие для сигнала "пользователь готов" (создается при старте потока)
         self.user_ready_event = None
+        self.chat_thread = None # Добавляем атрибут для потока
 
         self.root.title("АнтиЧатБот")
-        self.root.geometry("550x450") # Немного увеличим окно
+        self.root.geometry("600x500") # Немного увеличим окно
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing) # Обработка закрытия окна
 
-        # --- Элементы интерфейса ---
-        # Выбор сайта
-        tk.Label(root, text="Выберите сайт:").pack(pady=(10, 0))
-        self.site_combobox = ttk.Combobox(root, values=self.sites, state="readonly", width=50)
+        # --- Фрейм для выбора сайта и кнопок ---
+        control_frame = tk.Frame(root)
+        control_frame.pack(pady=10, padx=10, fill=tk.X)
+
+        tk.Label(control_frame, text="Выберите сайт:").pack(side=tk.LEFT, padx=(0, 5))
+        self.site_combobox = ttk.Combobox(control_frame, values=self.sites, state="readonly", width=40)
         if self.sites:
-            self.site_combobox.current(0) # Выбрать первый сайт по умолчанию
-        self.site_combobox.pack(pady=5)
+            self.site_combobox.current(0)
+        else:
+             # Если нет сайтов, выводим сообщение и блокируем интерфейс
+             self.site_combobox['values'] = ["Нет сайтов в config.json!"]
+             self.site_combobox.current(0)
+             self.site_combobox.config(state=tk.DISABLED)
+        self.site_combobox.pack(side=tk.LEFT, expand=True, fill=tk.X)
 
-        # Кнопка Старт
-        self.start_button = tk.Button(root, text="Начать диалог", command=self.start_chat_thread, width=25, height=2)
-        self.start_button.pack(pady=10)
+        # --- Фрейм для кнопок Старт/Продолжить ---
+        button_frame = tk.Frame(root)
+        button_frame.pack(pady=5, padx=10)
 
-        # НОВАЯ Кнопка Продолжить
-        self.continue_button = tk.Button(root, text="Продолжить выполнение", command=self.on_continue_clicked, width=25, state=tk.DISABLED)
-        self.continue_button.pack(pady=5)
+        self.start_button = tk.Button(button_frame, text="Начать диалог", command=self.start_chat_thread, width=25, height=2, state=tk.NORMAL if self.sites else tk.DISABLED)
+        self.start_button.pack(side=tk.LEFT, padx=5)
 
-        # Область для вывода статуса
-        tk.Label(root, text="Статус:").pack(pady=(10, 0))
-        self.status_text = scrolledtext.ScrolledText(root, wrap=tk.WORD, width=70, height=12, state='disabled')
-        self.status_text.pack(pady=5, padx=10, expand=True, fill=tk.BOTH)
+        self.continue_button = tk.Button(button_frame, text="Продолжить (после формы)", command=self.on_continue_clicked, width=25, state=tk.DISABLED)
+        self.continue_button.pack(side=tk.LEFT, padx=5)
+
+        # --- Область статуса ---
+        status_frame = tk.LabelFrame(root, text="Статус и Логи", padx=5, pady=5)
+        status_frame.pack(pady=10, padx=10, expand=True, fill=tk.BOTH)
+
+        self.status_text = scrolledtext.ScrolledText(status_frame, wrap=tk.WORD, height=15, state='disabled')
+        self.status_text.pack(expand=True, fill=tk.BOTH)
 
         # Запускаем проверку очереди статуса
         self.check_status_queue()
 
     def update_status(self, message):
-        """Безопасно обновляет текстовое поле статуса из любого потока."""
-        # Добавляем специальный маркер для ожидания формы
+        """Безопасно добавляет сообщение в очередь для обновления GUI."""
+        self.status_queue.put(message)
+
+    def process_status_message(self, message):
+        """Обрабатывает сообщение из очереди и обновляет GUI."""
         if message == "WAITING_FOR_FORM_INPUT":
-            # Отображаем инструкцию и активируем кнопку "Продолжить"
-            display_message = ("---> ДЕЙСТВИЕ ПОЛЬЗОВАТЕЛЯ:\n"
-                               "Пожалуйста, заполните форму в браузере "
-                               "(имя, телефон, согласие и т.д.) и нажмите кнопку 'Начать чат' (или аналогичную) НА САЙТЕ.\n"
-                               "После того как увидите интерфейс чата, нажмите кнопку 'Продолжить выполнение' ЗДЕСЬ в программе.")
-            self.status_queue.put(display_message)
-            # Активируем кнопку (безопасно через главный поток)
-            self.root.after(0, lambda: self.continue_button.config(state=tk.NORMAL))
+            display_message = (
+                "=============================================================\n"
+                "ACTION REQUIRED / ТРЕБУЕТСЯ ДЕЙСТВИЕ:\n"
+                "=============================================================\n"
+                "Пожалуйста, перейдите в окно браузера.\n"
+                "Заполните все необходимые поля в форме чата "
+                "(имя, email, телефон, согласие и т.п.).\n"
+                "Нажмите кнопку начала чата НА САЙТЕ (например, 'Начать чат', 'Отправить').\n\n"
+                ">>> После появления интерфейса чата в браузере, нажмите кнопку \n"
+                "    'Продолжить (после формы)' ЗДЕСЬ, в этой программе. <<<\n"
+                "============================================================="
+            )
+            self.status_text.configure(state='normal')
+            self.status_text.insert(tk.END, display_message + "\n\n")
+            self.status_text.configure(state='disabled')
+            # Активируем кнопку "Продолжить"
+            self.continue_button.config(state=tk.NORMAL)
+            self.start_button.config(state=tk.DISABLED) # Блокируем старт на время ожидания
+        elif message.startswith("КРИТИЧЕСКАЯ ОШИБКА:"):
+             self.status_text.configure(state='normal')
+             self.status_text.insert(tk.END, message + "\n\n")
+             self.status_text.configure(state='disabled')
+             messagebox.showerror("Критическая ошибка", message)
+             self.reset_ui() # Сбрасываем интерфейс в исходное состояние
         else:
-            # Обычное сообщение статуса
-            self.status_queue.put(message)
+            self.status_text.configure(state='normal')
+            self.status_text.insert(tk.END, message + "\n") # Убрал двойной перенос строки
+            self.status_text.configure(state='disabled')
+
+        self.status_text.see(tk.END)
 
     def check_status_queue(self):
-        """Проверяет очередь и обновляет GUI, если есть сообщения."""
+        """Проверяет очередь статуса и вызывает обработчик."""
         try:
-            while True: # Обрабатываем все сообщения в очереди за раз
-                message = self.status_queue.get_nowait() # Не блокировать, если пусто
-                self.status_text.configure(state='normal') # Включить редактирование
-                self.status_text.insert(tk.END, message + "\n\n") # Добавим отступ между сообщениями
-                self.status_text.configure(state='disabled') # Выключить редактирование
-                self.status_text.see(tk.END) # Прокрутить вниз
-        except Exception: # Ловим Queue.empty (имя может отличаться в разных версиях)
-            pass # Очередь пуста, ничего не делаем
-
-        # Перезапускаем проверку через 100 мс
+            while True:
+                message = self.status_queue.get_nowait()
+                self.process_status_message(message)
+        except Exception: # Очередь пуста
+            pass
+        # Перезапускаем проверку
         self.root.after(100, self.check_status_queue)
 
     def start_chat_thread(self):
         """Запускает логику чата в отдельном потоке."""
         selected_site = self.site_combobox.get()
-        if not selected_site:
-            self.update_status("Ошибка: Сайт не выбран.")
+        if not selected_site or selected_site == "Нет сайтов в config.json!":
+            messagebox.showerror("Ошибка", "Сайт не выбран или конфигурация пуста.")
             return
 
-        # Блокируем обе кнопки
+        # Блокируем кнопки и очищаем статус
         self.start_button.config(state=tk.DISABLED, text="В процессе...")
-        self.continue_button.config(state=tk.DISABLED) # Убедимся, что она выключена
+        self.continue_button.config(state=tk.DISABLED)
+        self.site_combobox.config(state=tk.DISABLED)
         self.status_text.configure(state='normal')
-        self.status_text.delete('1.0', tk.END) # Очищаем поле статуса
+        self.status_text.delete('1.0', tk.END)
         self.status_text.configure(state='disabled')
+        self.update_status(f"--- Запуск сессии для сайта: {selected_site} ---")
 
-        # Создаем НОВОЕ событие для ЭТОЙ сессии чата
         self.user_ready_event = Event()
 
-        # Создаем и запускаем поток
-        # Передаем self.update_status И self.user_ready_event в chat_logic
+        # Передаем ОБА конфига в поток
         self.chat_thread = threading.Thread(
             target=chat_logic.run_chat_session,
-            args=(selected_site, self.config, self.update_status, self.user_ready_event), # Добавлен user_ready_event
-            daemon=True # Поток завершится, если закроется основное окно
+            args=(selected_site, self.config_sites, self.update_status, self.user_ready_event, self.config_redis),
+            daemon=True
         )
         self.chat_thread.start()
 
-        # Запускаем проверку завершения потока, чтобы разблокировать кнопку Старт
         self.root.after(500, self.check_thread_completion)
 
-    # НОВЫЙ метод для кнопки "Продолжить"
     def on_continue_clicked(self):
         """Вызывается при нажатии кнопки 'Продолжить выполнение'."""
-        self.continue_button.config(state=tk.DISABLED) # Снова деактивируем кнопку
+        self.continue_button.config(state=tk.DISABLED)
         if self.user_ready_event:
-            self.update_status(">>> Пользователь подтвердил готовность. Продолжаем...")
-            self.user_ready_event.set() # Устанавливаем событие, сигнализируя рабочему потоку
+            self.update_status(">>> Пользователь подтвердил ввод формы. Продолжаем...")
+            self.user_ready_event.set()
 
     def check_thread_completion(self):
-        """Проверяет, завершился ли поток чата, и управляет кнопками."""
+        """Проверяет, завершился ли поток чата."""
         if self.chat_thread and self.chat_thread.is_alive():
-            # Поток еще работает, проверим позже
             self.root.after(500, self.check_thread_completion)
         else:
-            # Поток завершился, разблокируем кнопку Старт
-            self.start_button.config(state=tk.NORMAL, text="Начать диалог")
-            # Убедимся, что кнопка Продолжить тоже выключена
-            self.continue_button.config(state=tk.DISABLED)
-            # Сообщение о завершении теперь выводится в chat_logic
+             if self.start_button['text'] == "В процессе...": # Проверяем, был ли запущен процесс
+                 self.update_status("--- Сессия завершена --- ")
+                 self.reset_ui()
+
+    def reset_ui(self):
+        """Сбрасывает кнопки и комбобокс в исходное состояние."""
+        self.start_button.config(state=tk.NORMAL if self.sites else tk.DISABLED, text="Начать диалог")
+        self.continue_button.config(state=tk.DISABLED)
+        if self.sites:
+             self.site_combobox.config(state="readonly")
+
+    def on_closing(self):
+        """Обработчик закрытия окна."""
+        # Здесь можно добавить логику для "мягкой" остановки потока, если нужно
+        # Например, установить какой-то флаг и дождаться завершения
+        # if self.chat_thread and self.chat_thread.is_alive():
+        #     if messagebox.askyesno("Подтверждение", "Процесс еще активен. Прервать?"):
+        #         # Логика остановки потока...
+        #         self.root.destroy()
+        #     else:
+        #         return # Не закрывать окно
+        # else:
+        #     self.root.destroy()
+        print("Окно закрывается.")
+        self.root.destroy()

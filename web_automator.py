@@ -4,11 +4,20 @@ import random
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException, ElementClickInterceptedException, StaleElementReferenceException
+from selenium.common.exceptions import (TimeoutException, ElementClickInterceptedException,
+                                    StaleElementReferenceException, NoSuchElementException)
 from selenium.webdriver.chrome.service import Service as ChromeService
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.common.action_chains import ActionChains
+import re # Для поиска капчи по тексту
 
+# --- Константы для поиска капчи ---
+CAPTCHA_TEXT_MARKER = "Люди не любят капчу"
+CAPTCHA_IMG_SELECTOR = 'img.VDlHi[alt="Капча"]' # Более точный селектор
+
+# Селекторы для Beeline
+FALLBACK_TEXT_SELECTOR_BEELINE = 'p.Q5yDq' # Запасной 1: параграф
+ULTRA_FALLBACK_SELECTOR_BEELINE = 'div.AEfjo' # Запасной 2: обертка контента
 
 def scroll_page(driver, scroll_amount=300, direction='down'):
     """Плавно прокручивает страницу вверх или вниз."""
@@ -16,7 +25,7 @@ def scroll_page(driver, scroll_amount=300, direction='down'):
         scroll_value = scroll_amount if direction == 'down' else -scroll_amount
         driver.execute_script(f"window.scrollBy(0, {scroll_value});")
         time.sleep(random.uniform(0.5, 1.5)) # Небольшая пауза после прокрутки
-        print(f"Страница прокручена {'вниз' if direction == 'down' else 'вверх'}.")
+        # print(f"Страница прокручена {'вниз' if direction == 'down' else 'вверх'}.") # Убрал лог
         return True
     except Exception as e:
         print(f"Ошибка при прокрутке страницы: {e}")
@@ -25,18 +34,20 @@ def scroll_page(driver, scroll_amount=300, direction='down'):
 
 def move_mouse_to_element_safe(driver, selector, element_name="элемент"):
     """Плавно перемещает курсор мыши к указанному элементу."""
+    if not selector or selector == "ЗАПОЛНИ_ЭТОТ_СЕЛЕКТОР":
+        # print(f"Пропуск перемещения мыши: селектор для '{element_name}' не задан.")
+        return False
     try:
-        wait = WebDriverWait(driver, 5) # Короткое ожидание, элемент должен быть видим
+        wait = WebDriverWait(driver, 5) # Короткое ожидание
         element = wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, selector)))
         actions = ActionChains(driver)
         actions.move_to_element(element)
-        actions.pause(random.uniform(0.5, 1.2)) # Задержка курсора на элементе
+        actions.pause(random.uniform(0.5, 1.2)) # Задержка
         actions.perform()
-        print(f"Курсор перемещен к элементу: {element_name} ('{selector}')")
+        # print(f"Курсор перемещен к элементу: {element_name} ('{selector}')") # Убрал лог
         return True
     except TimeoutException:
-        # Не страшно, если элемент для эмуляции не найден
-        print(f"Элемент для перемещения мыши не найден: {element_name} ('{selector}')")
+        # print(f"Элемент для перемещения мыши не найден: {element_name} ('{selector}')")
         return False
     except Exception as e:
         print(f"Ошибка при перемещении мыши к элементу {element_name}: {e}")
@@ -49,16 +60,22 @@ def init_driver():
         options = webdriver.ChromeOptions()
         # options.add_argument('--headless') # Для отладки лучше запускать с видимым окном
         options.add_argument("--start-maximized") # Открывать в максимальном окне
-        options.add_experimental_option("excludeSwitches", ["enable-logging"]) # Убрать лишние логи в консоль
+        options.add_experimental_option("excludeSwitches", ["enable-logging"]) # Убрать лишние логи
+        # Попытка подавить DevTools сообщения (может не работать на всех версиях)
+        options.add_experimental_option('excludeSwitches', ['enable-automation'])
+        options.add_experimental_option('useAutomationExtension', False)
+        options.add_argument('--log-level=3')
 
-        # Автоматически скачивает/обновляет и использует chromedriver
+        print("Инициализация Chrome WebDriver...")
         service = ChromeService(executable_path=ChromeDriverManager().install())
         driver = webdriver.Chrome(service=service, options=options)
         print("Драйвер Chrome инициализирован.")
         return driver
     except Exception as e:
-        print(f"Ошибка инициализации драйвера: {e}")
+        print(f"КРИТИЧЕСКАЯ ОШИБКА инициализации драйвера: {e}")
+        print("Возможно, проблема с установкой ChromeDriver или правами доступа.")
         return None
+
 
 def navigate_to_login(driver, site_config):
     """Переходит на страницу входа на сайт."""
@@ -71,193 +88,316 @@ def navigate_to_login(driver, site_config):
         print(f"Ошибка при переходе на страницу входа {site_config.get('login_url', 'Не указан')}: {e}")
         return False
 
+
+def click_button_safe(driver, selector, button_name, wait_time=10):
+    """Ожидает, находит и кликает кнопку, обрабатывая исключения."""
+    if not selector or selector == "ЗАПОЛНИ_ЭТОТ_СЕЛЕКТОР":
+        print(f"Пропуск клика по кнопке '{button_name}': селектор не задан.")
+        return True # Считаем успешным, если селектор не нужен
+    try:
+        wait = WebDriverWait(driver, wait_time)
+        print(f"Ожидание кнопки '{button_name}' ({selector})...")
+        button = wait.until(
+            EC.element_to_be_clickable((By.CSS_SELECTOR, selector)),
+            message=f"Кнопка '{button_name}' ('{selector}') не найдена или не кликабельна за {wait_time} сек."
+        )
+        print(f"Кнопка '{button_name}' найдена. Попытка клика...")
+        try:
+            driver.execute_script("arguments[0].scrollIntoView(true);", button)
+            time.sleep(0.5)
+            button.click()
+        except ElementClickInterceptedException:
+            print(f"Обычный клик по '{button_name}' перехвачен, пробую JS...")
+            driver.execute_script("arguments[0].click();", button)
+        print(f"Кнопка '{button_name}' нажата.")
+        time.sleep(random.uniform(1.5, 3.0)) # Пауза после клика
+        return True
+    except TimeoutException:
+        print(f"Ошибка: Кнопка '{button_name}' ({selector}) не найдена за {wait_time} сек.")
+        # Для некоторых кнопок (куки, пост-чат) это может быть не критично
+        return False # Возвращаем False при таймауте
+    except Exception as e:
+        print(f"Ошибка при клике на кнопку '{button_name}' ({selector}): {e}")
+        return False
+
+
 def wait_for_login_and_open_chat(driver, site_config, status_callback):
     """
-    Ожидает, пока пользователь войдет в систему и кнопка чата станет доступной,
-    затем кликает на кнопку чата.
+    Обрабатывает до трех кнопок для открытия чата:
+    1. (Опционально) Кнопка согласия с куки.
+    2. Основная кнопка открытия чата.
+    3. (Опционально) Кнопка внутри чата (например, "Пока нет").
     """
+    cookie_selector = site_config.get('cookie_consent_button_selector')
+    chat_button_selector = site_config.get('chat_button_selector')
+    post_chat_selector = site_config.get('post_chat_open_button_selector')
+
+    if not chat_button_selector or chat_button_selector == "ЗАПОЛНИ_ЭТОТ_СЕЛЕКТОР":
+         status_callback("КРИТИЧЕСКАЯ ОШИБКА: Основной селектор кнопки чата (chat_button_selector) не заполнен!")
+         return False
+
     try:
-        chat_button_selector = site_config['chat_button_selector']
-        if not chat_button_selector or chat_button_selector == "ЗАПОЛНИ_ЭТОТ_СЕЛЕКТОР":
-             status_callback("Ошибка: Селектор кнопки чата не заполнен в config.json!")
-             return False
+        # --- Шаг 1: Клик по кнопке Куки (если есть) ---
+        status_callback("Проверка кнопки согласия с куки...")
+        # Используем короткое время ожидания для необязательной кнопки
+        if not click_button_safe(driver, cookie_selector, "Согласие с куки", wait_time=5):
+             print("Кнопка куки не найдена или ошибка клика (продолжаем)...")
+             # Не прерываем, если кнопка куки не найдена
+        else:
+            status_callback("Кнопка куки обработана.")
 
-        # Длительное ожидание - пользователь должен успеть войти
-        # Установи таймаут в секундах (например, 5 минут = 300 секунд)
-        wait_time = 300
-        wait = WebDriverWait(driver, wait_time)
+        # --- Шаг 2: Клик по основной кнопке Чата --- 
+        status_callback("Ожидание основной кнопки чата...")
+        if not click_button_safe(driver, chat_button_selector, "Основная кнопка чата", wait_time=300):
+            # Если основная кнопка не найдена - это критично
+            status_callback(f"КРИТИЧЕСКАЯ ОШИБКА: Основная кнопка чата '{chat_button_selector}' не найдена.")
+            return False
+        status_callback("Основная кнопка чата нажата. Ожидание инициализации чата...")
 
-        status_callback(f"Ожидание появления кнопки чата ({chat_button_selector})...\n"
-                        f"ПОЖАЛУЙСТА, ВОЙДИТЕ В СВОЙ АККАУНТ В БРАУЗЕРЕ.\n"
-                        f"У вас есть {wait_time // 60} минут.")
+        # --- Шаг 3: Клик по кнопке ВНУТРИ чата (если есть) ---
+        status_callback("Проверка дополнительной кнопки внутри чата...")
+        # Используем среднее время ожидания, т.к. чат должен был появиться
+        if not click_button_safe(driver, post_chat_selector, "Доп. кнопка в чате", wait_time=15):
+             print("Дополнительная кнопка в чате не найдена или ошибка клика (продолжаем)...")
+             # Не прерываем, если эта кнопка не найдена
+        else:
+             status_callback("Дополнительная кнопка в чате обработана.")
 
-        chat_button = wait.until(
-            EC.element_to_be_clickable((By.CSS_SELECTOR, chat_button_selector)),
-            message=f"Кнопка чата '{chat_button_selector}' не найдена или не кликабельна за {wait_time} сек. Возможно, вы не вошли или селектор неверный."
-        )
-
-        status_callback("Кнопка чата найдена. Попытка открыть чат...")
-        print("Кнопка чата найдена. Попытка клика...")
-
-        # Попытка клика с обходом возможных перекрытий
-        try:
-            chat_button.click()
-        except ElementClickInterceptedException:
-            print("Обычный клик перехвачен, пробую клик через JavaScript...")
-            driver.execute_script("arguments[0].click();", chat_button)
-
-        print("Кнопка чата нажата.")
-        status_callback("Чат открыт/открывается. Ожидание загрузки...")
-        time.sleep(5) # Дать чату время загрузиться
+        status_callback("Этап открытия чата завершен.")
         return True
 
-    except TimeoutException as e:
-        print(f"Ошибка ожидания/клика по кнопке чата: {e}")
-        status_callback(f"Ошибка: Кнопка чата не найдена за {wait_time} сек. Убедитесь, что вы вошли и селектор верный.")
-        return False
     except Exception as e:
-        print(f"Непредвиденная ошибка при ожидании/открытии чата: {e}")
-        status_callback(f"Ошибка при открытии чата: {e}")
+        print(f"Непредвиденная ошибка в wait_for_login_and_open_chat: {e}")
+        status_callback(f"КРИТИЧЕСКАЯ ОШИБКА при открытии чата: {e}")
+        import traceback
+        traceback.print_exc()
         return False
+
 
 def send_message(driver, site_config, message):
     """
-    Находит поле ввода, кликает на него, вводит сообщение ПО СИМВОЛАМ
-    и нажимает кнопку отправки.
-    ПРЕДУПРЕЖДЕНИЕ: Посимвольный ввод может быть нестабилен на некоторых сайтах.
+    Находит поле ввода, кликает, вводит сообщение ПО СИМВОЛАМ, ждет кнопку отправки и кликает.
     """
     try:
-        input_selector = site_config['selectors']['input_field']
-        send_button_selector = site_config['selectors']['send_button']
+        input_selector = site_config.get('selectors', {}).get('input_field')
+        send_button_selector = site_config.get('selectors', {}).get('send_button')
 
-        if any(s == "ЗАПОЛНИ_ЭТОТ_СЕЛЕКТОР" or not s for s in [input_selector, send_button_selector]):
-            print("Ошибка: Селекторы поля ввода или кнопки отправки не заполнены!")
+        if any(not s or s == "ЗАПОЛНИ_ЭТОТ_СЕЛЕКТОР" for s in [input_selector, send_button_selector]):
+            print("КРИТИЧЕСКАЯ ОШИБКА: Селекторы поля ввода или кнопки отправки не заполнены в config.json!")
             return False
 
-        wait = WebDriverWait(driver, 15)
+        wait = WebDriverWait(driver, 20) # Немного увеличим ожидание
+        short_wait = WebDriverWait(driver, 5)
 
         # --- НАХОДИМ ПОЛЕ ВВОДА ---
         try:
             input_field = wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, input_selector)))
-            print(f"Поле ввода '{input_selector}' найдено.")
+            # print(f"Поле ввода '{input_selector}' найдено.")
         except TimeoutException:
-             print(f"Ошибка: Поле ввода '{input_selector}' не найдено или не видимо за 15 сек.")
+             print(f"Ошибка: Поле ввода '{input_selector}' не найдено/не видимо за 20 сек.")
              return False
 
-        # --- КЛИК ДЛЯ ФОКУСА, ОЧИСТКА И ПОСИМВОЛЬНЫЙ ВВОД ---
+        # --- КЛИК, ОЧИСТКА, ВВОД --- 
         try:
-            # Кликаем на поле для фокуса перед вводом
-            input_field.click()
-            print("Клик по полю ввода для фокуса.")
-            time.sleep(0.4) # Пауза после клика
+            # Клик для фокуса
+            try:
+                 input_field.click()
+                 # print("Клик по полю ввода.")
+            except ElementClickInterceptedException:
+                 print("Клик по полю ввода перехвачен, пробую JS...")
+                 driver.execute_script("arguments[0].click();", input_field)
+            time.sleep(0.5)
 
             input_field.clear()
-            print("Поле ввода очищено.")
-            time.sleep(0.3) # Пауза после очистки
+            # print("Поле ввода очищено.")
+            time.sleep(0.3)
 
-            # *** ИЗМЕНЕНИЕ ЗДЕСЬ: Посимвольный ввод ***
-            print(f"Начинаем посимвольный ввод: '{message[:30]}...'")
+            # Посимвольный ввод
+            # print(f"Посимвольный ввод: '{message[:30]}...'")
             for char in message:
                 input_field.send_keys(char)
-                # Пауза между символами для эмуляции
-                time.sleep(random.uniform(0.08, 0.25)) # Немного увеличенный и вариативный интервал
+                time.sleep(random.uniform(0.07, 0.22))
 
-            print(f"Текст '{message[:30]}...' введен посимвольно.")
-            time.sleep(0.5) # Пауза после ввода перед поиском кнопки
+            print(f"Текст введен: '{message[:40]}...'")
+            time.sleep(0.6) # Пауза перед поиском кнопки
 
         except StaleElementReferenceException:
-             print("### Ошибка: Поле ввода устарело (StaleElementReferenceException) во время ввода. Попробуем найти заново на след. итерации.")
-             return False # Выходим, чтобы внешний цикл попробовал снова
+             print("Ошибка: Поле ввода устарело (StaleElementRef). Повтор на след. итерации.")
+             return False
         except Exception as e:
-            print(f"Ошибка при клике/очистке или посимвольном вводе в поле '{input_selector}': {e}")
+            print(f"Ошибка при взаимодействии с полем ввода '{input_selector}': {e}")
             return False
 
         # --- НАХОДИМ И НАЖИМАЕМ КНОПКУ ОТПРАВКИ ---
         try:
-            # Используем presence_of_element_located, т.к. кнопка может быть скрыта, но существовать
-            # Затем проверяем кликабельность отдельно
-            send_button = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, send_button_selector)))
-            # Дополнительное ожидание кликабельности
+            # Ждем, пока кнопка станет кликабельной (она может появиться/активироваться после ввода)
             send_button = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, send_button_selector)))
+            # print(f"Кнопка отправки '{send_button_selector}' найдена и кликабельна.")
 
-            print(f"Кнопка отправки '{send_button_selector}' найдена и кликабельна.")
-            # Попытка клика с обходом возможных перекрытий
+            # Клик
             try:
                 send_button.click()
             except ElementClickInterceptedException:
-                print("Обычный клик по кнопке отправки перехвачен, пробую JS клик...")
+                print("Клик по кнопке отправки перехвачен, пробую JS...")
                 driver.execute_script("arguments[0].click();", send_button)
 
-            print(f"Сообщение отправлено (после посимвольного ввода): {message}")
+            print(f"Сообщение отправлено: {message}")
             return True
         except TimeoutException:
-            print(f"Ошибка: Кнопка отправки '{send_button_selector}' не найдена или не кликабельна за 15 сек.")
+            print(f"Ошибка: Кнопка отправки '{send_button_selector}' не найдена/не кликабельна за 20 сек.")
+            # Попробуем найти ее как просто видимый элемент (на случай если она не кликабельна, но видна)
+            try:
+                 btn = short_wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, send_button_selector)))
+                 print(f"Кнопка найдена, но не кликабельна (возможно, аттрибут disabled). HTML: {btn.get_attribute('outerHTML')[:100]}...")
+            except:
+                 print("Кнопка отправки вообще не найдена на странице.")
             return False
         except StaleElementReferenceException:
-             print("### Ошибка: Кнопка отправки устарела (StaleElementReferenceException). Попробуем на след. итерации.")
+             print("Ошибка: Кнопка отправки устарела (StaleElementRef). Повтор на след. итерации.")
              return False
         except Exception as e:
             print(f"Ошибка при клике на кнопку отправки '{send_button_selector}': {e}")
             return False
 
     except Exception as e:
-        # Общая ошибка
         print(f"Непредвиденная ошибка в функции send_message: {e}")
         return False
 
 
 def get_last_message(driver, site_config, last_known_messages_count):
     """
-    Извлекает текст последнего сообщения из области чата.
-    Возвращает (new_text, new_count) или (None, last_known_messages_count)
+    Извлекает тексты ВСЕХ НОВЫХ сообщений и данные капчи (если применимо).
+    Логика адаптируется: сложная для сайтов с 'text_content_selector', простая для остальных.
+    Возвращает кортеж: (list_of_new_texts, captcha_base64, new_count)
+    - list_of_new_texts: Список строк с текстами новых сообщений (может быть пустым).
+    - captcha_base64: Строка base64 изображения капчи (или None).
+    - new_count: Новое общее количество сообщений.
+    Если новых сообщений нет, возвращает ([], None, last_known_messages_count).
     """
+    list_of_new_texts = [] # Возвращаем список
+    captcha_base64 = None
+    new_count = last_known_messages_count
+
     try:
-        messages_area_selector = site_config['selectors']['messages_area']
-        message_selector = site_config['selectors']['individual_message']
+        selectors = site_config.get('selectors', {})
+        messages_area_selector = selectors.get('messages_area')
+        message_block_selector = selectors.get('individual_message')
+        text_content_selector = selectors.get('text_content_selector') # Для Beeline
+        use_specific_text_logic = bool(text_content_selector) # Флаг сложной логики
 
-        if any(s == "ЗАПОЛНИ_ЭТОТ_СЕЛЕКТОР" for s in [messages_area_selector, message_selector]):
-            print("Ошибка: Селекторы области сообщений или отдельного сообщения не заполнены!")
-            return None, last_known_messages_count
+        if any(not s or s == "ЗАПОЛНИ_ЭТОТ_СЕЛЕКТОР" for s in [messages_area_selector, message_block_selector]):
+            print("КРИТИЧЕСКАЯ ОШИБКА: Селекторы 'messages_area' или 'individual_message' не заполнены!")
+            return [], None, last_known_messages_count # Пустой список
 
-        wait = WebDriverWait(driver, 10) # Ждем недолго, основное ожидание в цикле логики
-
-        # Дождаться наличия хотя бы одного сообщения (или области)
+        wait = WebDriverWait(driver, 10)
         wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, messages_area_selector)))
+        time.sleep(1.8) # Пауза
 
-        # Находим все сообщения
-        # Добавим небольшую паузу, чтобы дать JS время отрисовать новое сообщение
-        time.sleep(1.5)
-        messages_elements = driver.find_elements(By.CSS_SELECTOR, f"{message_selector}")
-        current_messages_count = len(messages_elements)
+        all_message_elements = driver.find_elements(By.CSS_SELECTOR, message_block_selector)
+        current_messages_count = len(all_message_elements)
 
-        if current_messages_count > last_known_messages_count and messages_elements:
-            # Есть новые сообщения, берем самое последнее
-            last_message_text = messages_elements[-1].text.strip()
-            print(f"Получено новое сообщение ({current_messages_count}): {last_message_text}")
-            return last_message_text, current_messages_count # Возвращаем текст и новое количество
-        elif messages_elements:
-            # Новых сообщений нет, но старые есть. Вернем последнее на всякий случай, но без изменения счетчика
-            # Может быть полезно для повторной проверки, если что-то пошло не так
-             # print(f"Новых сообщений нет (всего {current_messages_count}). Последнее известное: {messages_elements[-1].text.strip()}")
-             return None, last_known_messages_count # Сигнал, что нового нет
-        else:
-            # Сообщений вообще нет
-            print("Сообщений в чате не найдено.")
-            return None, 0 # Нового нет, и всего 0
+        if current_messages_count <= last_known_messages_count:
+            return [], None, last_known_messages_count # Нет новых сообщений, пустой список
+
+        new_count = current_messages_count
+        new_message_elements = all_message_elements[last_known_messages_count:]
+        print(f"Найдено {len(new_message_elements)} новых сообщений. Обработка...")
+
+        captcha_text_found = False # Для логики капчи
+        captcha_image_found = False
+
+        # --- Обработка КАЖДОГО нового сообщения --- 
+        for i, msg_element in enumerate(new_message_elements):
+            current_text = None
+
+            # --- Адаптивное извлечение текста ---
+            if use_specific_text_logic: # --- Сложная логика (Beeline) ---
+                try: # Внешний try для Beeline
+                    try: # Попытка 1: Основной селектор
+                        text_element = msg_element.find_element(By.CSS_SELECTOR, text_content_selector)
+                        current_text = text_element.text.strip()
+                    except NoSuchElementException: # Если основной не найден
+                        try: # Попытка 2: Запасной 1 (параграф)
+                            fallback_text_element = msg_element.find_element(By.CSS_SELECTOR, FALLBACK_TEXT_SELECTOR_BEELINE)
+                            current_text = fallback_text_element.text.strip()
+                            if i == len(new_message_elements) -1: print(f"  Предупреждение: Не найден '{text_content_selector}'. Текст из '{FALLBACK_TEXT_SELECTOR_BEELINE}'.")
+                        except NoSuchElementException: # Если и он не найден
+                            try: # Попытка 3: Запасной 2 (обертка)
+                               ultra_fallback_element = msg_element.find_element(By.CSS_SELECTOR, ULTRA_FALLBACK_SELECTOR_BEELINE)
+                               current_text = ultra_fallback_element.text.strip()
+                               if i == len(new_message_elements) - 1: print(f"  Предупреждение: Не найдены осн. и зап.1. Текст из '{ULTRA_FALLBACK_SELECTOR_BEELINE}'.")
+                            except NoSuchElementException: # Если ВСЕ не найдены
+                                 if i == len(new_message_elements) - 1: print(f"  КРИТИЧЕСКАЯ ОШИБКА: Не найден ни один селектор текста для Beeline.")
+                                 current_text = None # Явно ставим None
+                # Отлов общих ошибок для Beeline вне цепочки NoSuchElement
+                except StaleElementReferenceException:
+                    print(f"  [{i+1}] Ошибка StaleElementReferenceException при извлечении текста (Beeline). Пропуск сообщения.")
+                    current_text = None
+                except Exception as e_text:
+                    print(f"  [{i+1}] Непредвиденная ошибка извлечения текста (Beeline): {e_text}")
+                    current_text = None
+            # --- Конец сложной логики Beeline --- 
+            
+            else: # --- Простая логика (Tele2 и др.) ---
+                try: # Try для простой логики
+                    current_text = msg_element.text.strip()
+                # Отлов ошибок для простой логики
+                except StaleElementReferenceException:
+                    print(f"  [{i+1}] Ошибка StaleElementReferenceException при извлечении текста (Простая). Пропуск сообщения.")
+                    current_text = None
+                except Exception as e_text:
+                    print(f"  [{i+1}] Непредвиденная ошибка извлечения текста (Простая): {e_text}")
+                    current_text = None
+            # --- Конец простой логики --- 
+
+            # Добавляем извлеченный текст (даже если None) в список
+            list_of_new_texts.append(current_text)
+            if current_text is not None:
+                 print(f"  [{i+1}/{len(new_message_elements)}] Текст: '{current_text[:60]}...'")
+            else:
+                 print(f"  [{i+1}/{len(new_message_elements)}] Текст: Не удалось извлечь.")
+
+            # --- Проверка на капчу (только для сложной логики) ---
+            if use_specific_text_logic:
+                if current_text and CAPTCHA_TEXT_MARKER in current_text:
+                    captcha_text_found = True
+                try:
+                    captcha_img = msg_element.find_element(By.CSS_SELECTOR, CAPTCHA_IMG_SELECTOR)
+                    captcha_src = captcha_img.get_attribute('src')
+                    if captcha_src and captcha_src.startswith('data:image'):
+                        captcha_base64 = captcha_src # Сохраняем последнее найденное изображение
+                        captcha_image_found = True
+                except NoSuchElementException:
+                    pass # Игнорируем, если картинки нет в этом блоке
+                except Exception as e_captcha:
+                    print(f"  [{i+1}] Ошибка поиска/извлечения img капчи: {e_captcha}")
+            # --- Конец проверки на капчу --- 
+        # --- Конец цикла по новым сообщениям --- 
+
+        # --- Финальное решение по капче --- 
+        final_captcha_base64 = captcha_base64 if (captcha_text_found and captcha_image_found) else None
+        if use_specific_text_logic:
+            if captcha_text_found != captcha_image_found:
+                 print(f"Капча обработана: текст={captcha_text_found}, картинка={captcha_image_found}. Результат: НЕТ КАПЧИ")
+            elif final_captcha_base64:
+                 print(f"Капча обработана: текст={captcha_text_found}, картинка={captcha_image_found}. Результат: КАПЧА ЕСТЬ")
+
+        print(f"Возврат: Сообщений={len(list_of_new_texts)}, Captcha={'ДА' if final_captcha_base64 else 'НЕТ'}, Count={new_count}")
+        return list_of_new_texts, final_captcha_base64, new_count
 
     except TimeoutException:
-        # print(f"Таймаут при ожидании сообщений ('{messages_area_selector}' или '{message_selector}').")
-        # Не страшно, если просто нет новых сообщений
-        return None, last_known_messages_count
+        return [], None, last_known_messages_count
     except Exception as e:
-        print(f"Ошибка при получении сообщения: {e}")
-        return None, last_known_messages_count # Ошибка
+        print(f"КРИТИЧЕСКАЯ ОШИБКА в get_last_message: {e}")
+        import traceback
+        traceback.print_exc()
+        return [], None, last_known_messages_count
 
 def close_driver(driver):
     """Закрывает веб-драйвер."""
     if driver:
         try:
             driver.quit()
-            print("Браузер закрыт.")
+            print("Драйвер Chrome закрыт.")
         except Exception as e:
-            print(f"Ошибка при закрытии браузера: {e}")
+            print(f"Ошибка при закрытии драйвера: {e}")
