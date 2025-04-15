@@ -5,9 +5,7 @@
       "к вам подключился специалист по имени",
       "оператор Beeline на линии",
       "меня зовут",
-      "оператор .* на связи",
-      "Перевожу вас на специалиста для дальнейшей консультации",
-      "Перевожу на специалиста – он поможет решить ваш вопрос."
+      "оператор .* на связи"
     ],
     "bot_indicator_phrases": [
       "время ответа специалиста может быть увеличено",
@@ -54,7 +52,15 @@
     ],
     "emulation_options": {
       "enable_scrolling": true,
-      "enable_mouse_movement_to_elements": true
+      "enable_mouse_movement_to_elements": true,
+      "enable_random_clicks": true,
+      "enable_random_mouse_movement": true
+    },
+    "selectors": {
+      "input_field": ".webim-message-area.webim-textarea-ext.scroll-content",
+      "send_button": ".webim-ico.webim-ico-send",
+      "messages_area": ".webim-messages",
+      "individual_message": ".webim-message-body"
     }
   },
   "redis": {
@@ -78,7 +84,8 @@
       "max_operator_request_attempts": 15,
       "operator_join_patterns": [
         "^здравствуйте! меня зовут .*",
-        "меня зовут"
+        "меня зовут",
+        "Зову на помощь человека. Пожалуйста, приготовьтесь назвать оператору паспортные данные — они могут потребоваться для консультации"
       ],
       "selectors": {
         "input_field": "textarea.eoPbw[placeholder=\"напишите, чем вам помочь\"]",
@@ -94,6 +101,13 @@
       "chat_button_selector": "a.chat-toggler__button.y-button-fab",
       "post_chat_open_button_selector": "button.button.button_secondary",
       "max_operator_request_attempts": 15,
+      "operator_join_patterns": [
+        "^здравствуйте! меня зовут .*",
+        "меня зовут",
+        "оператор .* подключился",
+        "специалист .* на связи",
+        "Перевожу на специалиста – он поможет решить ваш вопрос."
+      ],
       "selectors": {
         "input_field": "textarea.chat-input__textarea",
         "send_button": "#sentIcon",

@@ -1,5 +1,7 @@
 # telegram_bot.py
 import redis
+# Импортируем специфичные ошибки Redis
+from redis.exceptions import ConnectionError, TimeoutError, RedisError
 import telegram
 # Используем Application и ApplicationBuilder вместо Updater
 from telegram.ext import Application, MessageHandler, filters, CommandHandler
@@ -11,6 +13,7 @@ import os
 import threading
 import time
 from dotenv import load_dotenv
+import traceback
 
 # --- Загрузка переменных окружения из .env файла ---
 load_dotenv()
@@ -48,9 +51,13 @@ try:
     r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
     r.ping() # Проверяем соединение
     print(f"Успешное подключение к Redis по адресу {REDIS_HOST}:{REDIS_PORT}")
-except redis.exceptions.ConnectionError as e:
+# Используем более специфичные исключения
+except (ConnectionError, TimeoutError, RedisError) as e:
     print(f"Ошибка подключения к Redis ({REDIS_HOST}:{REDIS_PORT}): {e}")
     print("Убедитесь, что Redis сервер запущен и доступен.")
+    exit()
+except Exception as e:
+    print(f"Непредвиденная ошибка при подключении к Redis: {e}")
     exit()
 
 # --- Инициализация Telegram Application (новый способ v20+) ---
@@ -94,12 +101,15 @@ async def handle_text(update, context):
             r.publish(CAPTCHA_SOLUTION_CHANNEL, user_text)
             await context.bot.send_message(chat_id=user_id, text=f"✅ Ответ '{user_text}' отправлен приложению.")
             waiting_for_captcha = False # Сбрасываем флаг
-        except redis.exceptions.ConnectionError as e:
+        # Улучшенная обработка ошибок Redis при публикации
+        except (ConnectionError, TimeoutError, RedisError) as e:
             print(f"Ошибка публикации решения в Redis: {e}")
-            await context.bot.send_message(chat_id=user_id, text=f"❌ Ошибка отправки решения через Redis: {e}")
+            await context.bot.send_message(chat_id=user_id, text=f"❌ Ошибка Redis при отправке решения: {e}. Повторите попытку позже.")
+            # Не сбрасываем флаг waiting_for_captcha, чтобы пользователь мог попробовать еще раз
         except Exception as e:
             print(f"Непредвиденная ошибка при публикации решения: {e}")
-            await context.bot.send_message(chat_id=user_id, text=f"❌ Ошибка отправки решения: {e}")
+            await context.bot.send_message(chat_id=user_id, text=f"❌ Непредвиденная ошибка при отправке решения: {e}")
+            waiting_for_captcha = False # Сбрасываем флаг в случае неизвестной ошибки
     else:
         print("Сообщение получено не во время ожидания капчи, игнорируется.")
         # await context.bot.send_message(chat_id=user_id, text="Сейчас я не ожидаю ввода капчи.")
@@ -213,13 +223,17 @@ def redis_listener():
                 except Exception as e:
                     print(f"Ошибка обработки сообщения из Redis (канал: {channel}): {e}")
 
-        except redis.exceptions.ConnectionError as e:
+        # Уточняем перехватываемые исключения для переподключения
+        except (ConnectionError, TimeoutError, RedisError) as e:
             print(f"Redis Listener: Потеряно соединение с Redis ({e}). Попытка переподключения через 10 секунд...")
-            if pubsub: pubsub.close() # Закрываем старый объект перед паузой
+            if pubsub: 
+                try: pubsub.close() # Закрываем старый объект перед паузой
+                except Exception as close_e: print(f"Ошибка при закрытии pubsub: {close_e}")
             pubsub = None
             time.sleep(10)
         except Exception as e:
             print(f"Redis Listener: Критическая ошибка ({e}). Остановка слушателя.")
+            traceback.print_exc()
             break # Выход из цикла while True
         finally:
              if pubsub:
