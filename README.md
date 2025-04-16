@@ -67,15 +67,32 @@ AntiChatBot is a Python desktop application designed to automate the initial int
 1.  **Prerequisites:**
     *   Python 3.8+
     *   Google Chrome browser
-    *   Redis server installed and running (e.g., via Docker, WSL, or native install). Default connection is `localhost:6379` (can be changed in `config.json`).
+    *   Docker Desktop (Windows/macOS) or Docker Engine (Linux) installed and running.
 
-2.  **Clone the repository:**
+2.  **Redis Setup (using Docker):**
+    *   Redis is used for communication between the GUI/ChatService and the optional Telegram Bot.
+    *   The easiest way to run Redis is using Docker. Open your terminal and run:
+        ```bash
+        docker run --name redis-antichatbot -p 6379:6379 -d redis
+        ```
+    *   **Explanation:**
+        *   `docker run`: Creates and starts a container.
+        *   `--name redis-antichatbot`: Gives the container a specific name (you can change it).
+        *   `-p 6379:6379`: Maps port 6379 on your machine to port 6379 inside the container (this is the default Redis port).
+        *   `-d`: Runs the container in the background (detached mode).
+        *   `redis`: Specifies the official Redis image from Docker Hub (will be downloaded if not present).
+    *   **To check logs:** `docker logs redis-antichatbot`
+    *   **To stop:** `docker stop redis-antichatbot`
+    *   **To remove:** `docker rm redis-antichatbot` (stop it first)
+    *   Ensure this Docker container is running before starting the application components.
+
+3.  **Clone the repository:**
     ```bash
     git clone <your-repository-url>
     cd AntiChatBot
     ```
 
-3.  **Create and activate a virtual environment (recommended):**
+4.  **Create and activate a virtual environment (recommended):**
     ```bash
     python -m venv venv
     # On Windows
@@ -84,7 +101,7 @@ AntiChatBot is a Python desktop application designed to automate the initial int
     source venv/bin/activate
     ```
 
-4.  **Install dependencies:**
+5.  **Install dependencies:**
     ```bash
     # Ensure you have the job queue extra for the Telegram bot
     python -m pip install --upgrade "python-telegram-bot[job-queue]"
@@ -92,7 +109,7 @@ AntiChatBot is a Python desktop application designed to automate the initial int
     ```
     *(Installs Selenium, webdriver-manager, redis-py, python-dotenv, python-telegram-bot, etc.)*
 
-5.  **(Optional but Recommended) Telegram Bot Setup:**
+6.  **(Optional but Recommended) Telegram Bot Setup:**
     *   Open Telegram and talk to `BotFather`.
     *   Create a new bot using `/newbot` command and follow instructions.
     *   **Copy the BOT TOKEN** provided by BotFather.
@@ -108,7 +125,7 @@ AntiChatBot is a Python desktop application designed to automate the initial int
         ```
     *   **Ensure `.env` is listed in your `.gitignore` file!**
 
-6.  **Configure `config.json`:**
+7.  **Configure `config.json`:**
     *   Review/update Redis host/port if not using defaults.
     *   Add/modify entries in the `sites` section. Pay close attention to all CSS selectors. Use the optional selectors (`cookie_consent_button_selector`, `post_chat_open_button_selector`, `text_content_selector`) as needed for specific site behavior.
     *   Refine `operator_join_patterns` and `bot_indicator_phrases` in `_defaults` or add site-specific overrides for better accuracy.

@@ -1,13 +1,7 @@
-# gui.py
 import tkinter as tk
 from tkinter import ttk, scrolledtext, messagebox
 import json
 import threading
-# Убираем прямой импорт chat_logic, т.к. он запускается отдельным сервисом
-# import chat_logic
-# Убираем импорт Queue и Event
-# from queue import Queue
-# from threading import Event
 import redis
 from redis.exceptions import ConnectionError, TimeoutError, RedisError
 import os
@@ -306,9 +300,6 @@ class ChatBotApp:
             published_count = self.redis_client.publish(user_ready_channel, "1")
             if published_count > 0:
                  self.update_status_display(f">>> Сигнал готовности для сессии {self.current_session_id} отправлен.")
-            else:
-                 # Это странно, chat_logic должен слушать этот канал
-                 messagebox.showwarning("Предупреждение", "Сигнал готовности отправлен, но его никто не слушает (ChatService/chat_logic мог завершиться?).")
         except (ConnectionError, TimeoutError, RedisError) as e:
              messagebox.showerror("Ошибка Redis", f"Не удалось отправить сигнал готовности: {e}")
              # Возможно, стоит снова активировать кнопку?
