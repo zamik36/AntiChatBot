@@ -8,6 +8,7 @@ import os
 from dotenv import load_dotenv
 import time
 import traceback
+import uuid
 
 # --- Загрузка переменных окружения (для Redis) ---
 load_dotenv()
@@ -36,6 +37,7 @@ class ChatBotApp:
         self.redis_listener_thread = None
         self.is_listening_redis = False
         self.stop_redis_listener_flag = threading.Event() # Флаг для остановки слушателя
+        self.last_displayed_status = None # <-- Добавляем атрибут для отслеживания последнего статуса
 
         # --- Инициализация GUI --- (остается похожей)
         self.root.title("АнтиЧатБот - Клиент")
@@ -77,6 +79,12 @@ class ChatBotApp:
 
     def update_status_display(self, message):
         """Обновляет текстовое поле статуса в главном потоке GUI."""
+        # --- ДОБАВЛЕНО: Проверка на дублирование --- #
+        if message == self.last_displayed_status:
+            return # Не отображаем то же самое сообщение снова
+        self.last_displayed_status = message # Запоминаем последнее отображенное сообщение
+        # --- КОНЕЦ ПРОВЕРКИ --- #
+
         # Эта функция должна вызываться из основного потока, например, через root.after
         # Теперь напрямую обновляем виджет, т.к. обработка идет в главном потоке
         if message == "WAITING_FOR_FORM_INPUT":
@@ -153,24 +161,32 @@ class ChatBotApp:
 
     def redis_status_listener(self):
         """Слушает сообщения статуса для ТЕКУЩЕЙ сессии в Redis."""
+        listener_instance_id = str(uuid.uuid4())[:4] # Unique ID for this listener instance/thread for logging
+        print(f"[GUI] Поток слушателя Redis ({listener_instance_id}) запущен.")
+
         while not self.stop_redis_listener_flag.is_set():
+            # --- ЛОГ: Начало итерации цикла ---
+            time.sleep(0.1) # Небольшая пауза для предотвращения 100% CPU
+
             if self.current_session_id and self.redis_client:
                 status_channel = SESSION_STATUS_CHANNEL_TEMPLATE.format(session_id=self.current_session_id)
+                # --- ЛОГ: Проверка pubsub и подписка ---
                 if not self.redis_pubsub:
                     try:
                         self.redis_pubsub = self.redis_client.pubsub(ignore_subscribe_messages=True)
+                        # --- ЛОГ: Перед подпиской ---
                         self.redis_pubsub.subscribe(status_channel)
-                        print(f"[GUI] Подписались на канал статуса: {status_channel}")
+                        # --- ЛОГ: После подписки ---
+                        print(f"[GUI] Успешная подписка на статус сессии: {status_channel}")
                         # Добавим сообщение в GUI о подписке
                         self.root.after(0, self.update_status_display, f"[INFO] Ожидание статуса сессии {self.current_session_id}...")
                     except (ConnectionError, TimeoutError, RedisError, AttributeError) as e:
-                        # AttributeError ловим на случай, если redis_client стал None между проверкой и использованием
-                        print(f"[GUI] Ошибка подписки на статус Redis: {e}")
+                        print(f"[GUI_LISTENER_THREAD {listener_instance_id}] ERROR during subscribe: {e}")
                         self.redis_pubsub = None # Сбрасываем для повторной попытки
                         time.sleep(2)
                         continue # Попробуем подписаться снова
                     except Exception as e:
-                         print(f"[GUI] Неожиданная ошибка подписки на статус Redis: {e}")
+                         print(f"[GUI_LISTENER_THREAD {listener_instance_id}] UNEXPECTED ERROR during subscribe: {e}")
                          traceback.print_exc()
                          self.redis_pubsub = None
                          time.sleep(5)
@@ -180,15 +196,20 @@ class ChatBotApp:
                 if self.redis_pubsub:
                     try:
                         message = self.redis_pubsub.get_message(timeout=1.0)
+
                         if message and message['type'] == 'message':
                             status_update = message['data']
-                            print(f"[GUI] Получен статус: {status_update[:100]}...")
-                            # Передаем обновление в основной поток через root.after
+                            # --- СУЩЕСТВУЮЩИЙ ЛОГ ---
                             self.root.after(0, self.update_status_display, status_update)
+                        # else: # Если сообщение None или не 'message'
+                        #     if message: print(f"[GUI_LISTENER_THREAD {listener_instance_id}] Ignored message (type: {message.get('type')})")
+                        #     # Просто продолжаем цикл
+
                     except TimeoutError:
                         continue # Это нормально, просто нет сообщений
                     except (ConnectionError, RedisError, AttributeError) as e:
-                        print(f"[GUI] Ошибка получения статуса из Redis: {e}. Переподписка...")
+                        # --- ЛОГ: Ошибка соединения ---
+                        print(f"[GUI] Ошибка соединения Redis при получении статуса: {e}. Переподключение...")
                         if self.redis_pubsub:
                             try: self.redis_pubsub.unsubscribe()
                             except Exception: pass
@@ -197,7 +218,8 @@ class ChatBotApp:
                         self.redis_pubsub = None
                         time.sleep(2)
                     except Exception as e:
-                         print(f"[GUI] Неожиданная ошибка получения статуса из Redis: {e}")
+                         # --- ЛОГ: Неожиданная ошибка ---
+                         print(f"[GUI] Неожиданная ошибка при получении статуса: {e}")
                          traceback.print_exc()
                          if self.redis_pubsub:
                              try: self.redis_pubsub.unsubscribe()
@@ -209,7 +231,8 @@ class ChatBotApp:
             else:
                 # Если нет активной сессии или клиента Redis, просто ждем
                 time.sleep(1)
-        print("[GUI] Поток слушателя Redis остановлен.")
+
+        print(f"[GUI] Поток слушателя Redis ({listener_instance_id}) остановлен.")
         self.is_listening_redis = False
 
     def request_session_start(self):
@@ -234,24 +257,10 @@ class ChatBotApp:
         self.status_text.configure(state='disabled')
 
         try:
-            # Публикуем запрос в Redis
-            # ChatService сгенерирует session_id и начнет публиковать статус
-            # GUI должен будет "угадать" или получить session_id (упрощение: пока не получаем)
-            # *** ВАЖНОЕ УПРОЩЕНИЕ: Мы не знаем session_id заранее! ***
-            # Слушатель redis_status_listener должен будет как-то его узнать.
-            # Пока сделаем ОЧЕНЬ просто: будем слушать ПОСЛЕДНИЙ запрошенный.
-            # Это не будет работать для параллельных сессий из одного GUI.
-            # Правильное решение: ChatService должен ПУБЛИКОВАТЬ session_id в отдельный канал,
-            # на который подписан GUI, или GUI должен генерировать ID и передавать его.
-            # --- Применяем упрощение: запоминаем запрошенный сайт --- 
-            # и надеемся, что статус придет именно для него.
-
-            # --- !!! НОВОЕ УПРОЩЕНИЕ: Генерируем ID в GUI и передаем его !!! --- 
-            import uuid
             self.current_session_id = str(uuid.uuid4())
             request_data = json.dumps({"site_name": selected_site, "session_id": self.current_session_id})
 
-            print(f"[GUI] Отправка запроса на старт сессии: {request_data}")
+            # --- ЛОГ: Перед отправкой запроса из GUI --- #
             published_count = self.redis_client.publish(SESSION_START_REQUEST_CHANNEL, request_data)
 
             if published_count > 0:
@@ -295,7 +304,7 @@ class ChatBotApp:
         self.continue_button.config(state=tk.DISABLED)
         user_ready_channel = USER_READY_CHANNEL_TEMPLATE.format(session_id=self.current_session_id)
         try:
-            print(f"[GUI] Отправка сигнала готовности пользователя для сессии {self.current_session_id} в канал {user_ready_channel}")
+            print(f"[GUI] Отправка сигнала готовности для сессии {self.current_session_id}")
             # Отправляем просто '1' как сигнал
             published_count = self.redis_client.publish(user_ready_channel, "1")
             if published_count > 0:
@@ -333,7 +342,7 @@ class ChatBotApp:
         if self.current_session_id and self.redis_client:
             close_channel = SESSION_CLOSE_REQUEST_TEMPLATE.format(session_id=self.current_session_id)
             try:
-                print(f"[GUI] Отправка сигнала закрытия для сессии {self.current_session_id} в канал {close_channel}")
+                print(f"[GUI] Отправка сигнала закрытия для сессии {self.current_session_id}")
                 # Отправляем просто 'close' как сигнал
                 self.redis_client.publish(close_channel, "close")
                 # Даем немного времени на отправку и обработку сигнала перед закрытием соединения
@@ -419,7 +428,6 @@ def load_site_config(filename=CONFIG_FILE):
 if __name__ == "__main__":
     # Загружаем уже обработанный конфиг сайтов
     config_sites_data = load_site_config()
-
     # Проверяем, вернулся ли словарь (даже пустой - это успех загрузки)
     if config_sites_data is not None:
         # Просто передаем полученный словарь в приложение

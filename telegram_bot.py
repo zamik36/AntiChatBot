@@ -2,7 +2,7 @@
 import redis
 # Импортируем специфичные ошибки Redis
 from redis.exceptions import ConnectionError, TimeoutError, RedisError
-import telegram
+# import telegram # <-- Удалить
 # Используем Application и ApplicationBuilder вместо Updater
 from telegram.ext import Application, MessageHandler, filters, CommandHandler
 # Импортируем нужные классы ошибок
@@ -112,7 +112,7 @@ async def handle_text(update, context):
             waiting_for_captcha = False # Сбрасываем флаг в случае неизвестной ошибки
     else:
         print("Сообщение получено не во время ожидания капчи, игнорируется.")
-        # await context.bot.send_message(chat_id=user_id, text="Сейчас я не ожидаю ввода капчи.")
+        # await context.bot.send_message(chat_id=user_id, text="Сейчас я не ожидаю ввода капчи.") # <-- Удалить
 
 # --- Асинхронные функции для вызова из job_queue ---
 # Эти функции будут вызываться через job_queue, им нужен context
@@ -170,7 +170,7 @@ def redis_listener():
             for message in pubsub.listen():
                 channel = message['channel']
                 data = message['data']
-                print(f"Redis Listener: Получено сообщение (канал: {channel})") # Лог
+                # print(f"Redis Listener: Получено сообщение (канал: {channel})") # <-- Закомментировать или удалить
 
                 try:
                     if channel == OPERATOR_NOTIFY_CHANNEL:

@@ -12,7 +12,6 @@ import json
 import threading
 import time
 import traceback
-import uuid # Для генерации уникальных ID сессий
 from dotenv import load_dotenv
 from antichatbot import chat_logic # Наша основная логика чата
 
@@ -72,6 +71,9 @@ def connect_redis():
 
 def session_runner(site_name, session_id, redis_config_dict):
     """Запускает сессию чата в отдельном потоке."""
+    # --- ЛОГ: Начало выполнения потока --- #
+    # print(f"[S_RUNNER:{session_id}] Thread started for site '{site_name}'.")
+    # --- КОНЕЦ ЛОГА ---
     global config, active_sessions
     print(f"[S:{session_id}] Запуск сессии чата для сайта '{site_name}'...")
     try:
@@ -120,24 +122,28 @@ def redis_listener():
 
             for message in pubsub.listen():
                 channel = message['channel']
+                session_id = None # Инициализируем
+                site_name = None
                 try:
                     request_data_str = message['data']
-                    print(f"Слушатель Redis: Получено сообщение (канал: {channel}): {request_data_str}")
+                    # --- ЛОГ: Получение сообщения слушателем --- #
+                    # print(f"[LISTENER] Raw message received on {channel}: {request_data_str}")
+                    # --- КОНЕЦ ЛОГА ---
                     request_data = json.loads(request_data_str)
                     site_name = request_data.get("site_name")
                     session_id = request_data.get("session_id")
 
                     if not site_name or not session_id:
-                         print(f"Предупреждение: Получены неполные данные запроса: {request_data_str}. Пропуск.")
+                         print(f"[LISTENER_WARN] Incomplete data: {request_data_str}. Skipping.")
                          continue
 
-                    print(f"Слушатель Redis: Запрос на запуск сессии для '{site_name}' (ID: {session_id}).")
+                    print(f"[LISTENER] Parsed request: Site='{site_name}', SessionID={session_id}")
 
                 except json.JSONDecodeError:
-                    print(f"Предупреждение: Не удалось декодировать JSON из сообщения Redis: {message.get('data')}. Пропуск.")
+                    print(f"[LISTENER_ERR] JSON Decode Error: {message.get('data')}. Skipping.")
                     continue
                 except Exception as e:
-                    print(f"Ошибка обработки входящего запроса на сессию: {e}")
+                    print(f"[LISTENER_ERR] Error processing message: {e}")
                     traceback.print_exc()
                     continue
 
@@ -145,13 +151,16 @@ def redis_listener():
                 sites_config = config.get("sites", {}) 
                 
                 if site_name not in sites_config:
-                    print(f"Предупреждение: Конфигурация для сайта '{site_name}' не найдена в разделе 'sites'. Игнорируется.")
+                    print(f"[LISTENER_WARN] Config for '{site_name}' not found. Ignoring.")
                     continue
 
                 if session_id in active_sessions:
-                    print(f"Предупреждение: Сессия с ID '{session_id}' уже активна. Игнорируется.")
+                    print(f"[LISTENER_WARN] Session '{session_id}' already active. Ignoring.")
                     continue
-
+                
+                # --- ЛОГ: Перед запуском потока --- #
+                print(f"[SERVICE] Запуск потока для SessionID={session_id}, Site='{site_name}'")
+                # --- КОНЕЦ ЛОГА ---
                 session_thread = threading.Thread(
                     target=session_runner,
                     args=(site_name, session_id, redis_config_dict),
@@ -159,7 +168,6 @@ def redis_listener():
                 )
                 active_sessions[session_id] = session_thread
                 session_thread.start()
-                print(f"[S:{session_id}] Поток для сессии '{site_name}' запущен.")
 
         except (ConnectionError, TimeoutError, RedisError) as e:
             print(f"Слушатель Redis: Потеряно соединение ({e}). Попытка переподключения...")

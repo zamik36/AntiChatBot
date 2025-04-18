@@ -44,7 +44,6 @@ AntiChatBot is a Python desktop application designed to automate the initial int
 ## Configuration (`config.json`)
 
 *   Contains `_defaults` for common patterns (operator/bot phrases, response templates, emulation).
-*   Contains a `redis` section (`host`, `port`).
 *   Contains a `sites` section where each key is a site name (e.g., `Tele2`, `Beeline`, `Yota`):
     *   `login_url`: Chat/login page URL.
     *   `cookie_consent_button_selector` (Optional): CSS selector for the cookie consent button.
@@ -70,21 +69,16 @@ AntiChatBot is a Python desktop application designed to automate the initial int
     *   Docker Desktop (Windows/macOS) or Docker Engine (Linux) installed and running.
 
 2.  **Redis Setup (using Docker):**
-    *   Redis is used for communication between the GUI/ChatService and the optional Telegram Bot.
-    *   The easiest way to run Redis is using Docker. Open your terminal and run:
+    *   Redis is used for communication between the GUI, Chat Service, and the Telegram Bot.
+    *   The easiest way to run Redis is using the provided `docker-compose.yml` file.
+    *   Open your terminal in the project root directory and run:
         ```bash
-        docker run --name redis-antichatbot -p 6379:6379 -d redis
+        docker-compose up -d
         ```
-    *   **Explanation:**
-        *   `docker run`: Creates and starts a container.
-        *   `--name redis-antichatbot`: Gives the container a specific name (you can change it).
-        *   `-p 6379:6379`: Maps port 6379 on your machine to port 6379 inside the container (this is the default Redis port).
-        *   `-d`: Runs the container in the background (detached mode).
-        *   `redis`: Specifies the official Redis image from Docker Hub (will be downloaded if not present).
-    *   **To check logs:** `docker logs redis-antichatbot`
-    *   **To stop:** `docker stop redis-antichatbot`
-    *   **To remove:** `docker rm redis-antichatbot` (stop it first)
-    *   Ensure this Docker container is running before starting the application components.
+    *   This will start a Redis container in the background.
+    *   **To check logs:** `docker-compose logs redis`
+    *   **To stop:** `docker-compose down`
+    *   Ensure Redis is running via Docker Compose before starting the application components.
 
 3.  **Clone the repository:**
     ```bash
@@ -126,45 +120,71 @@ AntiChatBot is a Python desktop application designed to automate the initial int
     *   **Ensure `.env` is listed in your `.gitignore` file!**
 
 7.  **Configure `config.json`:**
-    *   Review/update Redis host/port if not using defaults.
     *   Add/modify entries in the `sites` section. Pay close attention to all CSS selectors. Use the optional selectors (`cookie_consent_button_selector`, `post_chat_open_button_selector`, `text_content_selector`) as needed for specific site behavior.
     *   Refine `operator_join_patterns` and `bot_indicator_phrases` in `_defaults` or add site-specific overrides for better accuracy.
 
 ## Usage
 
-1.  **Ensure Redis server is running.**
+The application now runs as three separate components that communicate via Redis. You will need **three separate terminal windows** open in the project root directory.
 
-2.  **(If using Telegram) Start the Telegram Bot Helper:**
-    *   Open a **separate terminal** in the project directory.
-    *   Activate the virtual environment (`venv\Scripts\activate` or `source venv/bin/activate`).
-    *   Run the bot script:
+1.  **Start Redis:**
+    *   Make sure Docker Desktop is running.
+    *   In one terminal, run:
+        ```bash
+        docker-compose up -d
+        ```
+    *   Leave this running. You only need to do this once unless you stop it with `docker-compose down`.
+
+2.  **Start the Chat Service:**
+    *   Open a **second terminal**.
+    *   Activate the virtual environment:
+        ```bash
+        # Windows
+        .\venv\Scripts\activate
+        # macOS/Linux
+        source venv/bin/activate
+        ```
+    *   Run the Chat Service script. This service listens for session requests from the GUI and manages the browser automation.
+        ```bash
+        python chat_service.py
+        ```
+    *   Keep this terminal running.
+
+3.  **(Optional) Start the Telegram Bot:**
+    *   If you configured the `.env` file for Telegram integration, open a **third terminal**.
+    *   Activate the virtual environment.
+    *   Run the Telegram Bot script. This bot handles CAPTCHA requests and operator notifications.
         ```bash
         python telegram_bot.py
         ```
-    *   Keep this terminal running in the background.
-    *   **Important:** Send the `/start` command to your bot in Telegram at least once to initiate the chat.
+    *   Keep this terminal running.
+    *   **Important:** Send the `/start` command to your bot in Telegram at least once to initiate the chat if you haven't already.
 
-3.  **Start the Main Application:**
-    *   Open **another terminal** in the project directory.
+4.  **Start the GUI Client:**
+    *   Open a **fourth terminal** (or reuse one if not running the Telegram bot).
     *   Activate the virtual environment.
-    *   Run the main script:
+    *   Run the GUI script. This is the user interface you interact with.
         ```bash
-        python main.py
+        python gui.py
         ```
 
-4.  **Interact with the GUI:**
-    *   Select the desired website.
+5.  **Interact with the GUI:**
+    *   Select the desired website from the dropdown.
     *   Click "Начать диалог".
-    *   A Chrome browser window will open.
-    *   Log in to the website in the browser if necessary.
-    *   Wait for the GUI prompt `ACTION REQUIRED / ТРЕБУЕТСЯ ДЕЙСТВИЕ` (if applicable for the site).
-    *   Switch to the browser, fill any required pre-chat forms, and submit the form *on the website*.
-    *   Switch back to the AntiChatBot GUI and click "Продолжить (после формы)".
+    *   The Chat Service (running in its terminal) will launch a Chrome browser window.
+    *   Follow the status updates in the GUI.
+    *   If prompted with `ACTION REQUIRED / ТРЕБУЕТСЯ ДЕЙСТВИЕ`:
+        *   Switch to the browser window.
+        *   Fill any required pre-chat forms and submit the form *on the website*.
+        *   Switch back to the AntiChatBot GUI and click "Продолжить (после формы)".
 
-5.  **Monitor the process:**
+6.  **Monitor the process:**
     *   The application will attempt to reach an operator.
-    *   Status updates appear in the GUI.
-    *   **If CAPTCHA appears:** You will receive the image in Telegram from your bot. Reply to the bot with the text from the image.
-    *   **If operator connects:** You will receive a notification in Telegram. The browser window will remain open.
+    *   **If CAPTCHA appears:** (Requires Telegram Bot running) You will receive the image in Telegram. Reply to the bot with the text from the image.
+    *   **If operator connects:** (Requires Telegram Bot running) You will receive a notification in Telegram. The main GUI will also indicate success. The browser window controlled by the Chat Service will remain open.
 
-6.  **Close the application window when finished.** If the operator was not found, the browser will close automatically. If the operator *was* found, you need to close the browser manually.
+7.  **Closing:**
+    *   To stop a session, simply close the GUI window. This will send a signal to the Chat Service to attempt a clean shutdown of that specific session.
+    *   If the operator was found or the GUI was closed manually, the Chat Service will leave the browser open.
+    *   If the session failed (timeout, errors, operator not found without manual closure), the Chat Service will automatically close the browser for that session.
+    *   To stop all components: Close the GUI window, press `Ctrl+C` in the `chat_service.py` and `telegram_bot.py` terminals, and run `docker-compose down` in the terminal where you started Redis.

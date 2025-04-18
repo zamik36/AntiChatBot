@@ -19,28 +19,24 @@ CAPTCHA_TEXT_MARKER = "Люди не любят капчу"
 CAPTCHA_IMG_SELECTOR = 'img.VDlHi[alt="Капча"]' # Более точный селектор
 
 # Селекторы для Beeline
-FALLBACK_TEXT_SELECTOR_BEELINE = 'p.Q5yDq' # Запасной 1: параграф
-ULTRA_FALLBACK_SELECTOR_BEELINE = 'div.AEfjo' # Запасной 2: обертка контента
+# FALLBACK_TEXT_SELECTOR_BEELINE = 'p.Q5yDq' # Запасной 1: параграф - УДАЛЕНО, НЕ ИСПОЛЬЗУЕТСЯ?
+# ULTRA_FALLBACK_SELECTOR_BEELINE = 'div.AEfjo' # Запасной 2: обертка контента - УДАЛЕНО, НЕ ИСПОЛЬЗУЕТСЯ?
 
 def scroll_page(driver, scroll_amount=300, direction='down'):
     """Плавно прокручивает страницу вверх или вниз."""
-    print(f"[DEBUG_EMU] Attempting scroll_page (direction: {direction})")
     try:
         scroll_value = scroll_amount if direction == 'down' else -scroll_amount
         driver.execute_script(f"window.scrollBy(0, {scroll_value});")
         time.sleep(random.uniform(0.5, 1.5)) # Небольшая пауза после прокрутки
-        # print(f"Страница прокручена {'вниз' if direction == 'down' else 'вверх'}.") # Убрал лог
         return True
     except Exception as e:
-        print(f"[DEBUG_EMU] Ошибка при прокрутке страницы: {e}")
+        print(f"[EMU_ERROR] Ошибка при прокрутке страницы: {e}")
         return False
 
 
 def move_mouse_to_element_safe(driver, selector, element_name="элемент"):
     """Плавно перемещает курсор мыши к указанному элементу."""
-    print(f"[DEBUG_EMU] Attempting move_mouse_to_element_safe (element: {element_name}, selector: {selector})")
     if not selector or selector == "ЗАПОЛНИ_ЭТОТ_СЕЛЕКТОР":
-        # print(f"Пропуск перемещения мыши: селектор для '{element_name}' не задан.")
         return False
     try:
         wait = WebDriverWait(driver, 5) # Короткое ожидание
@@ -49,13 +45,11 @@ def move_mouse_to_element_safe(driver, selector, element_name="элемент"):
         actions.move_to_element(element)
         actions.pause(random.uniform(0.5, 1.2)) # Задержка
         actions.perform()
-        # print(f"Курсор перемещен к элементу: {element_name} ('{selector}')") # Убрал лог
         return True
     except TimeoutException:
-        # print(f"Элемент для перемещения мыши не найден: {element_name} ('{selector}')")
         return False
     except Exception as e:
-        print(f"[DEBUG_EMU] Ошибка при перемещении мыши к элементу {element_name}: {e}")
+        print(f"[EMU_ERROR] Ошибка при перемещении мыши к элементу {element_name}: {e}")
         return False
 
 
@@ -63,7 +57,6 @@ def move_mouse_randomly(driver):
     """Перемещает мышь в случайные координаты видимой области окна.
     Использует execute_script для симуляции события mousemove.
     """
-    print("[DEBUG_EMU] Attempting move_mouse_randomly (JS method)")
     try:
         viewport_width = driver.execute_script("return window.innerWidth")
         viewport_height = driver.execute_script("return window.innerHeight")
@@ -82,11 +75,10 @@ def move_mouse_randomly(driver):
         document.dispatchEvent(event);
         """
         driver.execute_script(js_script)
-        # print(f"JS mousemove event dispatched to ({random_x}, {random_y})")
         time.sleep(random.uniform(0.5, 1.0)) # Небольшая пауза после симуляции
         return True
     except Exception as e:
-        print(f"[DEBUG_EMU] Ошибка при случайном перемещении мыши (JS method): {e}")
+        print(f"[EMU_ERROR] Ошибка при случайном перемещении мыши (JS method): {e}")
         return False
 
 
@@ -96,7 +88,6 @@ def perform_random_click(driver, site_config):
     Пытается кликнуть внутри элемента 'messages_area', если селектор задан,
     иначе кликает по 'body'. Это предотвращает случайные клики по кнопкам/ссылкам.
     """
-    print("[DEBUG_EMU] Attempting perform_random_click")
     click_target_selector = site_config.get('selectors', {}).get('messages_area')
     element_name = "область сообщений"
 
@@ -104,7 +95,6 @@ def perform_random_click(driver, site_config):
         click_target_selector = 'body' # Кликаем по body, если нет специфичного селектора
         element_name = "тело страницы"
 
-    print(f"[DEBUG_EMU] perform_random_click target: {element_name} ('{click_target_selector}')")
     try:
         # Находим целевой элемент (messages_area или body)
         wait = WebDriverWait(driver, 5)
@@ -117,56 +107,58 @@ def perform_random_click(driver, site_config):
         actions.pause(random.uniform(0.3, 0.8))
         actions.click(element_to_click) # Кликаем именно на этот элемент
         actions.perform()
-        # print(f"Безопасный случайный клик выполнен по элементу: {element_name} ('{click_target_selector}')") # Лог убран
         time.sleep(random.uniform(0.7, 1.5))
         return True
     except TimeoutException:
-        print(f"[DEBUG_EMU] Элемент для безопасного клика не найден: {element_name} ('{click_target_selector}')")
         return False
     except ElementClickInterceptedException:
-        print(f"[DEBUG_EMU] Клик по элементу {element_name} перехвачен. Пропускаем этот клик.")
         return False # Считаем неудачей, если клик перехвачен
     except Exception as e:
-        print(f"[DEBUG_EMU] Ошибка при выполнении безопасного случайного клика по {element_name}: {e}")
+        print(f"[EMU_ERROR] Ошибка при выполнении безопасного случайного клика по {element_name}: {e}")
         return False
 
 
 def init_driver():
     """Инициализирует и возвращает веб-драйвер Chrome.
     Использует webdriver-manager для автоматической загрузки драйвера.
+    Предназначен для ЛОКАЛЬНОГО запуска (не в Docker).
     """
     try:
         options = webdriver.ChromeOptions()
+        # Стандартные опции для локального запуска
         options.add_argument("--start-maximized")
-        options.add_experimental_option("excludeSwitches", ["enable-logging"])
-        options.add_experimental_option('excludeSwitches', ['enable-automation'])
-        options.add_experimental_option('useAutomationExtension', False)
+        # Убираем опции, которые могут мешать локальному запуску или не нужны
+        # options.add_experimental_option('excludeSwitches', ['enable-automation'])
+        # options.add_experimental_option('useAutomationExtension', False)
         options.add_argument('--log-level=3')
 
-        # --- УБИРАЕМ: Указание пути к Chrome binary ---
-        # chrome_binary_path = r"C:\student\chrome-win64\chrome.exe"
-        # print(f"Указание пути к Chrome: {chrome_binary_path}")
-        # options.binary_location = chrome_binary_path
-        # --- КОНЕЦ УДАЛЕНИЯ ---
+        # --- ОПЦИИ ДЛЯ DOCKER/HEADLESS УДАЛЕНЫ ---
+        # options.add_argument("--headless=new") 
+        # options.add_argument("--no-sandbox")
+        # options.add_argument("--disable-dev-shm-usage")
+        # options.add_argument("--disable-gpu")
+        # options.add_argument("--window-size=1920x1080")
+        # options.add_argument("--disable-features=VizDisplayCompositor")
+        # options.add_argument(f"--user-data-dir=...")
+        # options.binary_location = ...
+        # -----------------------------------------
 
-        # --- ВОЗВРАЩАЕМ: Использование webdriver-manager --- 
-        print("Инициализация Chrome WebDriver (автоматический поиск/скачивание драйвера)...")
+        print("Инициализация Chrome WebDriver...")
         # Используем Service с webdriver-manager
         service = ChromeService(executable_path=ChromeDriverManager().install())
         driver = webdriver.Chrome(service=service, options=options)
         print("Драйвер Chrome инициализирован.")
         return driver
     except WebDriverException as e_wd:
-         # Оставляем общую обработку WebDriverException
          print(f"КРИТИЧЕСКАЯ ОШИБКА WebDriverException при инициализации драйвера: {e_wd.msg.splitlines()[0]}")
          if "session not created" in e_wd.msg:
-             print("!!! Ошибка 'session not created'. Проверьте совместимость версий Chrome и ChromeDriver (webdriver-manager мог ошибиться).")
+             print("!!! Ошибка 'session not created'. Проверьте совместимость версий Chrome и ChromeDriver.")
          elif "cannot find chrome binary" in e_wd.msg.lower():
-             print("!!! Ошибка 'cannot find chrome binary'. Убедитесь, что Chrome установлен в стандартное местоположение.")
+             print("!!! Ошибка 'cannot find chrome binary'. Убедитесь, что Chrome установлен корректно.")
          return None
     except Exception as e:
         print(f"КРИТИЧЕСКАЯ ОШИБКА инициализации драйвера: {e}")
-        # traceback.print_exc() # Можно раскомментировать для детальной отладки
+        traceback.print_exc()
         return None
 
 
@@ -352,19 +344,18 @@ def send_message(driver, site_config, message):
 
 
 def get_last_message(driver, site_config, last_known_messages_count):
-    """
-    Извлекает тексты ВСЕХ НОВЫХ сообщений и данные капчи (если применимо).
-    Логика адаптируется: сложная для сайтов с 'text_content_selector', простая для остальных.
-    Возвращает кортеж: (list_of_new_texts, captcha_base64, new_count)
-    - list_of_new_texts: Список строк с текстами новых сообщений (может быть пустым).
-    - captcha_base64: Строка base64 изображения капчи (или None).
-    - new_count: Новое общее количество сообщений.
-    Если новых сообщений нет, возвращает ([], None, last_known_messages_count).
-    """
-    list_of_new_texts = [] # Возвращаем список
-    captcha_base64 = None
-    new_count = last_known_messages_count
+    """Извлекает текст последнего сообщения из чата, определяет наличие капчи.
 
+    Args:
+        driver: Экземпляр Selenium WebDriver.
+        site_config: Конфигурация сайта.
+        last_known_messages_count: Количество сообщений, обработанных ранее.
+
+    Returns:
+        tuple: (str or None, bool)
+            - Первое значение: Текст сообщения (str) или URL капчи (str), или None, если новых сообщений нет или ошибка.
+            - Второе значение: True, если обнаружена капча, иначе False.
+    """
     try:
         selectors = site_config.get('selectors', {})
         messages_area_selector = selectors.get('messages_area')
@@ -374,7 +365,7 @@ def get_last_message(driver, site_config, last_known_messages_count):
 
         if any(not s or s == "ЗАПОЛНИ_ЭТОТ_СЕЛЕКТОР" for s in [messages_area_selector, message_block_selector]):
             print("КРИТИЧЕСКАЯ ОШИБКА: Селекторы 'messages_area' или 'individual_message' не заполнены!")
-            return [], None, last_known_messages_count # Пустой список
+            return None, False
 
         wait = WebDriverWait(driver, 10)
         wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, messages_area_selector)))
@@ -384,101 +375,86 @@ def get_last_message(driver, site_config, last_known_messages_count):
         current_messages_count = len(all_message_elements)
 
         if current_messages_count <= last_known_messages_count:
-            return [], None, last_known_messages_count # Нет новых сообщений, пустой список
+            return None, False
 
-        new_count = current_messages_count
-        new_message_elements = all_message_elements[last_known_messages_count:]
-        print(f"Найдено {len(new_message_elements)} новых сообщений. Обработка...")
+        new_messages_count = current_messages_count - last_known_messages_count
+        if new_messages_count <= 0:
+            return None, False
 
-        captcha_text_found = False # Для логики капчи
-        captcha_image_found = False
+        # print(f"Найдено новых сообщений: {new_messages_count}")
+        # Берем последнее сообщение из всего списка (самое новое)
+        last_message_element = all_message_elements[-1]
 
-        # --- Обработка КАЖДОГО нового сообщения --- 
-        for i, msg_element in enumerate(new_message_elements):
-            current_text = None
-
-            # --- Адаптивное извлечение текста ---
-            if use_specific_text_logic: # --- Сложная логика (Beeline) ---
-                try: # Внешний try для Beeline
-                    try: # Попытка 1: Основной селектор
-                        text_element = msg_element.find_element(By.CSS_SELECTOR, text_content_selector)
-                        current_text = text_element.text.strip()
-                    except NoSuchElementException: # Если основной не найден
-                        try: # Попытка 2: Запасной 1 (параграф)
-                            fallback_text_element = msg_element.find_element(By.CSS_SELECTOR, FALLBACK_TEXT_SELECTOR_BEELINE)
-                            current_text = fallback_text_element.text.strip()
-                            if i == len(new_message_elements) -1: print(f"  Предупреждение: Не найден '{text_content_selector}'. Текст из '{FALLBACK_TEXT_SELECTOR_BEELINE}'.")
-                        except NoSuchElementException: # Если и он не найден
-                            try: # Попытка 3: Запасной 2 (обертка)
-                               ultra_fallback_element = msg_element.find_element(By.CSS_SELECTOR, ULTRA_FALLBACK_SELECTOR_BEELINE)
-                               current_text = ultra_fallback_element.text.strip()
-                               if i == len(new_message_elements) - 1: print(f"  Предупреждение: Не найдены осн. и зап.1. Текст из '{ULTRA_FALLBACK_SELECTOR_BEELINE}'.")
-                            except NoSuchElementException: # Если ВСЕ не найдены
-                                 if i == len(new_message_elements) - 1: print(f"  КРИТИЧЕСКАЯ ОШИБКА: Не найден ни один селектор текста для Beeline.")
-                                 current_text = None # Явно ставим None
-                # Отлов общих ошибок для Beeline вне цепочки NoSuchElement
-                except StaleElementReferenceException:
-                    print(f"  [{i+1}] Ошибка StaleElementReferenceException при извлечении текста (Beeline). Пропуск сообщения.")
-                    current_text = None
-                except Exception as e_text:
-                    print(f"  [{i+1}] Непредвиденная ошибка извлечения текста (Beeline): {e_text}")
-                    current_text = None
-            # --- Конец сложной логики Beeline --- 
-            
-            else: # --- Простая логика (Tele2 и др.) ---
-                try: # Try для простой логики
-                    current_text = msg_element.text.strip()
-                # Отлов ошибок для простой логики
-                except StaleElementReferenceException:
-                    print(f"  [{i+1}] Ошибка StaleElementReferenceException при извлечении текста (Простая). Пропуск сообщения.")
-                    current_text = None
-                except Exception as e_text:
-                    print(f"  [{i+1}] Непредвиденная ошибка извлечения текста (Простая): {e_text}")
-                    current_text = None
-            # --- Конец простой логики --- 
-
-            # Добавляем извлеченный текст (даже если None) в список
-            list_of_new_texts.append(current_text)
-            if current_text is not None:
-                 print(f"  [{i+1}/{len(new_message_elements)}] Текст: '{current_text[:60]}...'")
-            else:
-                 print(f"  [{i+1}/{len(new_message_elements)}] Текст: Не удалось извлечь.")
-
-            # --- Проверка на капчу (только для сложной логики) ---
-            if use_specific_text_logic:
-                if current_text and CAPTCHA_TEXT_MARKER in current_text:
-                    captcha_text_found = True
-                try:
-                    captcha_img = msg_element.find_element(By.CSS_SELECTOR, CAPTCHA_IMG_SELECTOR)
-                    captcha_src = captcha_img.get_attribute('src')
-                    if captcha_src and captcha_src.startswith('data:image'):
-                        captcha_base64 = captcha_src # Сохраняем последнее найденное изображение
-                        captcha_image_found = True
-                except NoSuchElementException:
-                    pass # Игнорируем, если картинки нет в этом блоке
-                except Exception as e_captcha:
-                    print(f"  [{i+1}] Ошибка поиска/извлечения img капчи: {e_captcha}")
-            # --- Конец проверки на капчу --- 
-        # --- Конец цикла по новым сообщениям --- 
-
-        # --- Финальное решение по капче --- 
-        final_captcha_base64 = captcha_base64 if (captcha_text_found and captcha_image_found) else None
+        # --- Логика извлечения текста (упрощена) ---
+        extracted_text = None
         if use_specific_text_logic:
-            if captcha_text_found != captcha_image_found:
-                 print(f"Капча обработана: текст={captcha_text_found}, картинка={captcha_image_found}. Результат: НЕТ КАПЧИ")
-            elif final_captcha_base64:
-                 print(f"Капча обработана: текст={captcha_text_found}, картинка={captcha_image_found}. Результат: КАПЧА ЕСТЬ")
+            try:
+                # print(f"Поиск текста по селектору: {text_content_selector}")
+                text_element = last_message_element.find_element(By.CSS_SELECTOR, text_content_selector)
+                found_text = text_element.text.strip()
+                if found_text:
+                    # print(f"Текст извлечен (метод 1 - text_content_selector): '{found_text[:50]}...'")
+                    extracted_text = found_text
+            except (NoSuchElementException, TimeoutException):
+                # print("text_content_selector не найден, пробуем метод 2...")
+                pass # Пробуем следующий метод
 
-        print(f"Возврат: Сообщений={len(list_of_new_texts)}, Captcha={'ДА' if final_captcha_base64 else 'НЕТ'}, Count={new_count}")
-        return list_of_new_texts, final_captcha_base64, new_count
+        # Метод 2: Получить весь текст блока и убрать имя/время (если селекторы есть)
+        if not extracted_text:
+            full_text = last_message_element.text
+            # print(f"Текст извлечен (метод 2 - весь блок): '{full_text[:50]}...'")
+            author_selector = site_config.get('selectors', {}).get('message_author_selector')
+            time_selector = site_config.get('selectors', {}).get('message_time_selector')
+            # Удаление имени автора
+            if author_selector:
+                try:
+                    author_element = last_message_element.find_element(By.CSS_SELECTOR, author_selector)
+                    full_text = full_text.replace(author_element.text, '', 1)
+                    # print(f"Удален автор: {author_element.text}")
+                except NoSuchElementException:
+                    pass
+            # Удаление времени
+            if time_selector:
+                try:
+                    time_element = last_message_element.find_element(By.CSS_SELECTOR, time_selector)
+                    full_text = full_text.replace(time_element.text, '', 1)
+                    # print(f"Удалено время: {time_element.text}")
+                except NoSuchElementException:
+                    pass
+            extracted_text = full_text.strip() # Обновляем extracted_text
 
-    except TimeoutException:
-        return [], None, last_known_messages_count
+        # --- Проверка на капчу --- 
+        captcha_check_text = extracted_text if extracted_text else "" # Используем извлеченный текст
+        # print(f"Анализ текста на капчу: {captcha_check_text[:50]}...")
+        if CAPTCHA_TEXT_MARKER.lower() in captcha_check_text.lower():
+            # print(f"Обнаружен текстовый маркер капчи: '{CAPTCHA_TEXT_MARKER}'")
+            # --- Поиск изображения капчи --- #
+            try:
+                captcha_img = last_message_element.find_element(By.CSS_SELECTOR, CAPTCHA_IMG_SELECTOR)
+                captcha_src = captcha_img.get_attribute('src')
+                # print(f"Найдено изображение капчи, src: {captcha_src[:50]}...")
+                return captcha_src, True # Возвращаем URL капчи и флаг True
+            except NoSuchElementException:
+                # print("Текстовый маркер есть, но изображение капчи не найдено.")
+                return "КАПЧА_НО_БЕЗ_IMG", True # Возвращаем маркер и флаг
+            except Exception as img_e:
+                print(f"Ошибка при поиске/получении src изображения капчи: {img_e}")
+                return "КАПЧА_НО_ОШИБКА_IMG", True
+        # else:
+            # print("Текстовый маркер капчи не найден.")
+            
+        return extracted_text if extracted_text is not None else "", False # Возвращаем текст и флаг False
+
+    except (NoSuchElementException, TimeoutException):
+        # print("Новые сообщения или элементы сообщений не найдены.")
+        return None, False
+    except StaleElementReferenceException:
+        print("Элемент сообщения устарел (StaleElementReferenceException), пропуск чтения.")
+        return None, False
     except Exception as e:
-        print(f"КРИТИЧЕСКАЯ ОШИБКА в get_last_message: {e}")
-        import traceback
+        print(f"Непредвиденная ошибка при получении последнего сообщения: {e}")
         traceback.print_exc()
-        return [], None, last_known_messages_count
+        return None, False
 
 def close_driver(driver):
     """Закрывает веб-драйвер."""

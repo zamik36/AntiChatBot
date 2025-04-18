@@ -25,10 +25,10 @@ SESSION_CLOSE_REQUEST_TEMPLATE = "antichatbot:session_close_request:{session_id}
 
 def perform_random_emulation(driver, site_config, emulation_options):
     """Выполняет ТОЛЬКО СКРОЛЛИНГ, если он включен в конфиге."""
-    print("[DEBUG_EMU] Entering perform_random_emulation (SCROLL ONLY)")
+    # print("[DEBUG_EMU] Entering perform_random_emulation (SCROLL ONLY)")
 
     if not emulation_options or not emulation_options.get("enable_scrolling", True):
-        print("[DEBUG_EMU] Scrolling disabled or no options, exiting.")
+        # print("[DEBUG_EMU] Scrolling disabled or no options, exiting.")
         return
 
     # Оставляем только скролл
@@ -38,7 +38,7 @@ def perform_random_emulation(driver, site_config, emulation_options):
     # Выбираем действие с учетом весов
     action = random.choices(possible_actions, weights=weights, k=1)[0]
 
-    print(f"[DEBUG_EMU] Chosen action: {action}")
+    # print(f"[DEBUG_EMU] Chosen action: {action}")
 
     try:
         if action == "scroll_down":
@@ -49,7 +49,7 @@ def perform_random_emulation(driver, site_config, emulation_options):
         # Все остальные elif удалены
 
     except Exception as e:
-         print(f"[DEBUG_EMU] Ошибка во время эмуляции ('{action}'): {e}")
+         print(f"[EMULATION_ERROR] Ошибка во время эмуляции ('{action}'): {e}")
 
 def is_operator_joined(message, site_config):
     """Проверяет, является ли сообщение признаком подключения оператора."""
@@ -70,13 +70,13 @@ def is_operator_joined(message, site_config):
         # Используем regex для более гибкого поиска (например, "оператор .* на связи")
         try:
              if re.search(pattern.lower(), message_lower):
-                 print(f"[CheckOperator] Обнаружен паттерн оператора: '{pattern}'")
+                 print(f"[OperatorCheck] Обнаружен паттерн оператора (regex): '{pattern}'")
                  return True # Похоже на оператора
         except re.error as e:
-            print(f"[CheckOperator] Ошибка regex в паттерне '{pattern}': {e}")
+            print(f"[OperatorCheck] Ошибка regex в паттерне '{pattern}': {e}")
             # Можно просто сравнить как строку в случае ошибки regex
             if pattern.lower() in message_lower:
-                 print(f"[CheckOperator] Обнаружен паттерн оператора (как строка): '{pattern}'")
+                 print(f"[OperatorCheck] Обнаружен паттерн оператора (строка): '{pattern}'")
                  return True
 
     # print("[CheckOperator] Сообщение не похоже ни на бота, ни на оператора.")
@@ -105,7 +105,7 @@ def choose_unique_response(all_templates, used_responses):
 
 def wait_for_captcha_solution(redis_client, pubsub, timeout=180):
     """Ожидает решения капчи из Redis канала с улучшенной обработкой ошибок."""
-    print(f"Ожидание решения капчи из Telegram (канал: {CAPTCHA_SOLUTION_CHANNEL}, таймаут: {timeout} сек)...", flush=True)
+    print(f"⏳ Ожидание решения капчи... (канал: {CAPTCHA_SOLUTION_CHANNEL}, таймаут: {timeout} сек)", flush=True)
     start_time = time.time()
     try:
         while time.time() - start_time < timeout:
@@ -114,24 +114,24 @@ def wait_for_captcha_solution(redis_client, pubsub, timeout=180):
                 message = pubsub.get_message(timeout=1.0) # Проверяем раз в секунду
                 if message and message['type'] == 'message':
                     solution = message['data']
-                    print(f"Получено решение капчи: '{solution}'")
+                    print(f"✅ Получено решение капчи: '{solution}'")
                     return solution
             except TimeoutError:
                 # Это ожидаемый таймаут для get_message, просто продолжаем цикл
                 continue
             except ConnectionError as e:
-                print(f"Ошибка соединения Redis при ожидании решения капчи: {e}")
+                print(f"❌ Ошибка соединения Redis при ожидании капчи: {e}")
                 return None # Ошибка соединения, не можем ждать дальше
             except RedisError as e:
-                print(f"Ошибка Redis при ожидании решения капчи: {e}")
+                print(f"❌ Ошибка Redis при ожидании капчи: {e}")
                 return None # Другая ошибка Redis
             # Небольшая пауза, чтобы не грузить CPU
             time.sleep(0.1)
     except Exception as e:
-        print(f"Непредвиденная ошибка в wait_for_captcha_solution: {e}")
+        print(f"❌ Непредвиденная ошибка в wait_for_captcha_solution: {e}")
         return None
 
-    print("Таймаут ожидания решения капчи.")
+    print("⌛ Таймаут ожидания решения капчи.")
     return None
 
 # --- НОВАЯ Функция ожидания сигнала готовности пользователя ---
@@ -139,7 +139,7 @@ def wait_for_user_ready(redis_client, session_id, timeout=300):
     """Ожидает сигнала готовности пользователя из Redis."""
     user_ready_channel = USER_READY_CHANNEL_TEMPLATE.format(session_id=session_id)
     pubsub = None
-    print(f"[S:{session_id}] Ожидание сигнала готовности от пользователя (канал: {user_ready_channel}, таймаут: {timeout} сек)...")
+    print(f"[S:{session_id}] ⏳ Ожидание сигнала от пользователя... (канал: {user_ready_channel}, таймаут: {timeout} сек)")
     start_time = time.time()
     try:
         pubsub = redis_client.pubsub(ignore_subscribe_messages=True)
@@ -149,16 +149,16 @@ def wait_for_user_ready(redis_client, session_id, timeout=300):
                 message = pubsub.get_message(timeout=1.0)
                 if message and message['type'] == 'message':
                     # Содержимое сообщения не так важно, сам факт получения - сигнал
-                    print(f"[S:{session_id}] Получен сигнал готовности от пользователя.")
+                    print(f"[S:{session_id}] ✅ Получен сигнал готовности от пользователя.")
                     return True
             except TimeoutError:
                 continue
             except (ConnectionError, RedisError) as e:
-                print(f"[S:{session_id}] Ошибка Redis при ожидании сигнала готовности: {e}")
+                print(f"[S:{session_id}] ❌ Ошибка Redis при ожидании сигнала: {e}")
                 return False # Ошибка, не можем ждать
             time.sleep(0.1)
     except Exception as e:
-        print(f"[S:{session_id}] Непредвиденная ошибка в wait_for_user_ready: {e}")
+        print(f"[S:{session_id}] ❌ Непредвиденная ошибка в wait_for_user_ready: {e}")
         traceback.print_exc()
         return False
     finally:
@@ -167,9 +167,9 @@ def wait_for_user_ready(redis_client, session_id, timeout=300):
                 pubsub.unsubscribe(user_ready_channel)
                 pubsub.close()
             except Exception as e:
-                print(f"[S:{session_id}] Ошибка при закрытии подписки на user_ready: {e}")
+                print(f"[S:{session_id}] Ошибка при закрытии подписки user_ready: {e}")
 
-    print(f"[S:{session_id}] Таймаут ожидания сигнала готовности от пользователя.")
+    print(f"[S:{session_id}] ⌛ Таймаут ожидания сигнала от пользователя.")
     return False
 
 # ==================================
@@ -200,14 +200,14 @@ def run_chat_session(site_name, config, session_id, redis_config):
         if redis_client:
             try:
                 # Добавляем префикс сессии для логов
-                print(f"[S:{session_id}] Публикация статуса: {message[:200]}...") # Лог с обрезкой
+                # print(f"[S:{session_id}] Публикация статуса: {message[:200]}...")
                 redis_client.publish(status_channel, message)
             except (ConnectionError, TimeoutError, RedisError) as e:
-                print(f"[S:{session_id}] Ошибка Redis при публикации статуса '{message[:50]}...': {e}")
+                print(f"[S:{session_id}] ❌ Ошибка Redis при публикации статуса '{message[:50]}...': {e}")
             except Exception as e:
-                 print(f"[S:{session_id}] Неожиданная ошибка при публикации статуса '{message[:50]}...': {e}")
+                 print(f"[S:{session_id}] ❌ Неожиданная ошибка при публикации статуса '{message[:50]}...': {e}")
         else:
-            print(f"[S:{session_id}] Пропуск публикации статуса (нет Redis клиента): {message[:50]}...")
+            print(f"[S:{session_id}] ⚠️ Пропуск публикации статуса (нет Redis клиента): {message[:50]}...")
 
     try:
         # --- 0. Инициализация Redis ---
@@ -219,12 +219,12 @@ def run_chat_session(site_name, config, session_id, redis_config):
             # Создаем pubsub ТОЛЬКО для капчи
             redis_pubsub_captcha = redis_client.pubsub(ignore_subscribe_messages=True)
             redis_pubsub_captcha.subscribe(CAPTCHA_SOLUTION_CHANNEL)
-            print(f"[S:{session_id}] Успешное подключение к Redis {redis_config['host']}:{redis_config['port']} и подписка на {CAPTCHA_SOLUTION_CHANNEL}")
+            # print(f"[S:{session_id}] Успешное подключение к Redis {redis_config['host']}:{redis_config['port']} и подписка на {CAPTCHA_SOLUTION_CHANNEL}")
 
             # <<< СОЗДАЕМ И ПОДПИСЫВАЕМ PUBSUB ДЛЯ ЗАКРЫТИЯ >>>
             redis_pubsub_close = redis_client.pubsub(ignore_subscribe_messages=True)
             redis_pubsub_close.subscribe(close_channel)
-            print(f"[S:{session_id}] Подписка на канал закрытия: {close_channel}")
+            # print(f"[S:{session_id}] Подписка на канал закрытия: {close_channel}")
             # <<< КОНЕЦ ПОДПИСКИ НА ЗАКРЫТИЕ >>>
 
             publish_status("Подключено к Redis.")
