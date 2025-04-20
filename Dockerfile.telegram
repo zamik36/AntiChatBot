@@ -1,0 +1,30 @@
+# Dockerfile.telegram
+
+# Используем официальный образ Python
+FROM python:3.11-slim
+
+# Устанавливаем рабочую директорию
+WORKDIR /app
+
+# Копируем файл зависимостей
+COPY requirements.txt .
+
+# Устанавливаем зависимости Python
+# Указываем явно python-telegram-bot[job-queue], как было в README
+RUN pip install --no-cache-dir "python-telegram-bot[job-queue]" && \
+    pip install --no-cache-dir -r requirements.txt
+
+# Копируем исходный код приложения (папку src) - может быть нужен для импортов
+COPY ./src ./src
+
+# Копируем основной скрипт бота
+COPY telegram_bot.py .
+
+# Копируем конфигурационный файл (если бот его использует)
+COPY config/ ./config/
+
+# Копируем файл переменных окружения
+COPY .env .
+
+# Устанавливаем точку входа
+CMD ["python", "-u", "telegram_bot.py"]

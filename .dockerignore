@@ -1,0 +1,31 @@
+# .dockerignore
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment
+venv/
+.venv/
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile*
+docker-compose.yml
+.dockerignore
+
+# IDE folders
+.idea/
+.vscode/
+
+# webdriver-manager cache (если используется)
+.wdm/
+
+# OS specific
+*.DS_Store
+Thumbs.db

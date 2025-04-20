@@ -1,0 +1,30 @@
+services:
+  # Сервис Redis
+  redis:
+    image: redis:alpine # Используем легковесный образ Redis
+    container_name: redis-antichatbot # Даем имя контейнеру
+    ports:
+      - "6379:6379" # Пробрасываем порт на хост
+    restart: always # Автоматически перезапускать Redis
+    volumes:
+      - redis_data:/data # Опционально: сохраняем данные Redis между перезапусками
+
+  # Сервис Telegram Bot
+  telegram-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile.telegram
+    container_name: telegrambot-antichatbot
+    restart: on-failure
+    depends_on:
+      - redis # Теперь зависит только от redis
+    environment:
+      - REDIS_HOST=redis # Подключается к redis по имени сервиса
+      - REDIS_PORT=6379
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./.env:/app/.env:ro
+
+# Определяем том для данных Redis
+volumes:
+  redis_data:

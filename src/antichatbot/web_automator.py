@@ -344,7 +344,7 @@ def send_message(driver, site_config, message):
 
 
 def get_last_message(driver, site_config, last_known_messages_count):
-    """Извлекает текст последнего сообщения из чата, определяет наличие капчи.
+    """Извлекает текст ВСЕХ НОВЫХ сообщений из чата и определяет наличие капчи.
 
     Args:
         driver: Экземпляр Selenium WebDriver.
@@ -352,109 +352,166 @@ def get_last_message(driver, site_config, last_known_messages_count):
         last_known_messages_count: Количество сообщений, обработанных ранее.
 
     Returns:
-        tuple: (str or None, bool)
-            - Первое значение: Текст сообщения (str) или URL капчи (str), или None, если новых сообщений нет или ошибка.
-            - Второе значение: True, если обнаружена капча, иначе False.
+        tuple: (list[str] or None, str or None, int)
+            - Первое значение: Список текстов новых сообщений (list[str]) или None.
+            - Второе значение: URL капчи (str), если обнаружена, иначе None.
+            - Третье значение: Обновленное количество сообщений.
     """
     try:
         selectors = site_config.get('selectors', {})
         messages_area_selector = selectors.get('messages_area')
         message_block_selector = selectors.get('individual_message')
-        text_content_selector = selectors.get('text_content_selector') # Для Beeline
-        use_specific_text_logic = bool(text_content_selector) # Флаг сложной логики
+        text_content_selector = selectors.get('text_content_selector') # Для извлечения текста, если он внутри блока
+        use_specific_text_logic = bool(text_content_selector)
+        author_selector = site_config.get('selectors', {}).get('message_author_selector')
+        time_selector = site_config.get('selectors', {}).get('message_time_selector')
 
         if any(not s or s == "ЗАПОЛНИ_ЭТОТ_СЕЛЕКТОР" for s in [messages_area_selector, message_block_selector]):
-            print("КРИТИЧЕСКАЯ ОШИБКА: Селекторы 'messages_area' или 'individual_message' не заполнены!")
-            return None, False
+            print("[GET_MSG_ERR] КРИТИЧЕСКАЯ ОШИБКА: Селекторы 'messages_area' или 'individual_message' не заполнены!")
+            return None, None, last_known_messages_count # Изменено: Возвращаем None для капчи
 
         wait = WebDriverWait(driver, 10)
-        wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, messages_area_selector)))
-        time.sleep(1.8) # Пауза
+        try:
+            wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, messages_area_selector)))
+        except TimeoutException:
+            print(f"[GET_MSG_ERR] Область сообщений ('{messages_area_selector}') не найдена за 10 сек.")
+            return None, None, last_known_messages_count
+        time.sleep(1.8) # Пауза, чтобы сообщения успели прогрузиться после действий
 
-        all_message_elements = driver.find_elements(By.CSS_SELECTOR, message_block_selector)
+        try:
+            all_message_elements = driver.find_elements(By.CSS_SELECTOR, message_block_selector)
+        except NoSuchElementException:
+            print("[GET_MSG] Блоки сообщений ('{message_block_selector}') не найдены.")
+            return None, None, last_known_messages_count
+
         current_messages_count = len(all_message_elements)
+        # print(f"[GET_MSG_DEBUG] Всего сообщений: {current_messages_count}, известно: {last_known_messages_count}")
 
         if current_messages_count <= last_known_messages_count:
-            return None, False
+            # print("[GET_MSG] Новых сообщений нет.")
+            return None, None, last_known_messages_count # Новых сообщений нет
 
-        new_messages_count = current_messages_count - last_known_messages_count
-        if new_messages_count <= 0:
-            return None, False
+        # --- Обработка НОВЫХ сообщений --- 
+        new_messages_elements = all_message_elements[last_known_messages_count:]
+        print(f"[GET_MSG] Обнаружено {len(new_messages_elements)} новых элементов сообщений.")
 
-        # print(f"Найдено новых сообщений: {new_messages_count}")
-        # Берем последнее сообщение из всего списка (самое новое)
-        last_message_element = all_message_elements[-1]
+        extracted_texts = []
+        found_captcha_src = None
 
-        # --- Логика извлечения текста (упрощена) ---
-        extracted_text = None
-        if use_specific_text_logic:
+        for i, message_element in enumerate(new_messages_elements):
+            print(f"[GET_MSG_DEBUG] Обработка нового элемента {i+1}/{len(new_messages_elements)}...")
+            current_element_text = None
             try:
-                # print(f"Поиск текста по селектору: {text_content_selector}")
-                text_element = last_message_element.find_element(By.CSS_SELECTOR, text_content_selector)
-                found_text = text_element.text.strip()
-                if found_text:
-                    # print(f"Текст извлечен (метод 1 - text_content_selector): '{found_text[:50]}...'")
-                    extracted_text = found_text
-            except (NoSuchElementException, TimeoutException):
-                # print("text_content_selector не найден, пробуем метод 2...")
-                pass # Пробуем следующий метод
+                # --- Логика извлечения текста для ТЕКУЩЕГО элемента --- 
+                if use_specific_text_logic:
+                    try:
+                        text_element = message_element.find_element(By.CSS_SELECTOR, text_content_selector)
+                        found_text = text_element.text.strip()
+                        if found_text:
+                            # print(f"[GET_MSG_DEBUG]   Текст (метод 1): '{found_text[:50]}...'")
+                            current_element_text = found_text
+                    except (NoSuchElementException, TimeoutException, StaleElementReferenceException):
+                        pass # Пробуем следующий метод
 
-        # Метод 2: Получить весь текст блока и убрать имя/время (если селекторы есть)
-        if not extracted_text:
-            full_text = last_message_element.text
-            # print(f"Текст извлечен (метод 2 - весь блок): '{full_text[:50]}...'")
-            author_selector = site_config.get('selectors', {}).get('message_author_selector')
-            time_selector = site_config.get('selectors', {}).get('message_time_selector')
-            # Удаление имени автора
-            if author_selector:
-                try:
-                    author_element = last_message_element.find_element(By.CSS_SELECTOR, author_selector)
-                    full_text = full_text.replace(author_element.text, '', 1)
-                    # print(f"Удален автор: {author_element.text}")
-                except NoSuchElementException:
-                    pass
-            # Удаление времени
-            if time_selector:
-                try:
-                    time_element = last_message_element.find_element(By.CSS_SELECTOR, time_selector)
-                    full_text = full_text.replace(time_element.text, '', 1)
-                    # print(f"Удалено время: {time_element.text}")
-                except NoSuchElementException:
-                    pass
-            extracted_text = full_text.strip() # Обновляем extracted_text
+                if not current_element_text:
+                    full_text = message_element.text
+                    # print(f"[GET_MSG_DEBUG]   Текст (метод 2 - весь блок): '{full_text[:50]}...'")
+                    # Удаление имени автора
+                    if author_selector:
+                        try:
+                            author_element = message_element.find_element(By.CSS_SELECTOR, author_selector)
+                            full_text = full_text.replace(author_element.text, '', 1)
+                        except (NoSuchElementException, StaleElementReferenceException): pass
+                    # Удаление времени
+                    if time_selector:
+                        try:
+                            time_element = message_element.find_element(By.CSS_SELECTOR, time_selector)
+                            full_text = full_text.replace(time_element.text, '', 1)
+                        except (NoSuchElementException, StaleElementReferenceException): pass
+                    current_element_text = full_text.strip()
 
-        # --- Проверка на капчу --- 
-        captcha_check_text = extracted_text if extracted_text else "" # Используем извлеченный текст
-        # print(f"Анализ текста на капчу: {captcha_check_text[:50]}...")
-        if CAPTCHA_TEXT_MARKER.lower() in captcha_check_text.lower():
-            # print(f"Обнаружен текстовый маркер капчи: '{CAPTCHA_TEXT_MARKER}'")
-            # --- Поиск изображения капчи --- #
-            try:
-                captcha_img = last_message_element.find_element(By.CSS_SELECTOR, CAPTCHA_IMG_SELECTOR)
-                captcha_src = captcha_img.get_attribute('src')
-                # print(f"Найдено изображение капчи, src: {captcha_src[:50]}...")
-                return captcha_src, True # Возвращаем URL капчи и флаг True
-            except NoSuchElementException:
-                # print("Текстовый маркер есть, но изображение капчи не найдено.")
-                return "КАПЧА_НО_БЕЗ_IMG", True # Возвращаем маркер и флаг
-            except Exception as img_e:
-                print(f"Ошибка при поиске/получении src изображения капчи: {img_e}")
-                return "КАПЧА_НО_ОШИБКА_IMG", True
-        # else:
-            # print("Текстовый маркер капчи не найден.")
-            
-        return extracted_text if extracted_text is not None else "", False # Возвращаем текст и флаг False
+                # Добавляем непустой текст в список
+                if current_element_text:
+                    print(f"[GET_MSG] Извлечен текст: '{current_element_text[:70]}...'")
+                    extracted_texts.append(current_element_text)
+                else:
+                    print(f"[GET_MSG_DEBUG]   Текст для элемента {i+1} не извлечен.")
 
-    except (NoSuchElementException, TimeoutException):
-        # print("Новые сообщения или элементы сообщений не найдены.")
-        return None, False
+                # --- Проверка на капчу в ТЕКУЩЕМ элементе (если еще не найдена) --- 
+                if not found_captcha_src:
+                    captcha_check_text = current_element_text if current_element_text else "" 
+                    if CAPTCHA_TEXT_MARKER.lower() in captcha_check_text.lower():
+                        print(f"[GET_MSG] !!! Обнаружен текстовый маркер капчи в элементе {i+1} !!!")
+                        # <<< НАЧАЛО ИЗМЕНЕНИЯ: Поиск IMG в текущем ИЛИ следующем элементе >>>
+                        captcha_img = None
+                        # 1. Ищем в текущем элементе
+                        try:
+                            captcha_img = message_element.find_element(By.CSS_SELECTOR, CAPTCHA_IMG_SELECTOR)
+                            print(f"[GET_MSG_DEBUG]   Изображение капчи найдено в ТЕКУЩЕМ элементе ({i+1}).")
+                        except NoSuchElementException:
+                            # 2. Если не нашли, и есть следующий элемент, ищем в нем
+                            if i + 1 < len(new_messages_elements):
+                                print(f"[GET_MSG_DEBUG]   Изображение не найдено в элементе {i+1}, пробуем в следующем ({i+2})...")
+                                try:
+                                    next_message_element = new_messages_elements[i+1]
+                                    captcha_img = next_message_element.find_element(By.CSS_SELECTOR, CAPTCHA_IMG_SELECTOR)
+                                    print(f"[GET_MSG_DEBUG]   Изображение капчи найдено в СЛЕДУЮЩЕМ элементе ({i+2}).")
+                                except NoSuchElementException:
+                                    print(f"[GET_MSG_WARN] Изображение капчи не найдено и в следующем элементе ({i+2}).")
+                                except Exception as next_e:
+                                    print(f"[GET_MSG_ERR] Ошибка при поиске изображения в следующем элементе ({i+2}): {next_e}")
+                            else:
+                                print(f"[GET_MSG_WARN] Текстовый маркер найден в последнем элементе, следующего нет для поиска изображения.")
+                        except Exception as img_find_e:
+                             print(f"[GET_MSG_ERR] Ошибка при поиске изображения капчи в текущем элементе: {img_find_e}")
+
+                        # 3. Если изображение нашли (в текущем или следующем)
+                        if captcha_img:
+                            try:
+                                captcha_src = captcha_img.get_attribute('src')
+                                print(f"[GET_MSG] Найдено изображение капчи, src: {captcha_src[:60]}...")
+                                # Очистка Base64 (логика без изменений)
+                                if captcha_src and captcha_src.startswith('data:image'):
+                                    base64_prefix_end = captcha_src.find(';base64,')
+                                    if base64_prefix_end != -1:
+                                        cleaned_captcha_src = captcha_src[base64_prefix_end + len(';base64,'):]
+                                        print("[GET_MSG_DEBUG]   Base64 префикс удален.")
+                                        found_captcha_src = cleaned_captcha_src 
+                                    else:
+                                        print("[GET_MSG_WARN] Найден 'data:image', но ';base64,' не обнаружен.")
+                                        found_captcha_src = captcha_src 
+                                else:
+                                    found_captcha_src = captcha_src 
+                            except Exception as img_e:
+                                print(f"[GET_MSG_ERR] Ошибка при получении src изображения капчи: {img_e}")
+                                found_captcha_src = "КАПЧА_НО_ОШИБКА_IMG"
+                        else:
+                             # Если изображение так и не нашли
+                             print("[GET_MSG_WARN] Текстовый маркер капчи есть, но изображение ('{CAPTCHA_IMG_SELECTOR}') не найдено ни в текущем, ни в следующем элементе.")
+                             found_captcha_src = "КАПЧА_НО_БЕЗ_IMG"
+                        # <<< КОНЕЦ ИЗМЕНЕНИЯ >>>
+
+            except StaleElementReferenceException:
+                print(f"[GET_MSG_WARN] Элемент сообщения {i+1} устарел (StaleElementReferenceException) во время обработки.")
+                # Можно добавить None в список текстов или просто пропустить
+                extracted_texts.append(None) # Добавляем None как маркер ошибки чтения
+            except Exception as el_e:
+                print(f"[GET_MSG_ERR] Непредвиденная ошибка при обработке элемента {i+1}: {el_e}")
+                traceback.print_exc()
+                extracted_texts.append(None) # Добавляем None как маркер ошибки чтения
+
+        # Возвращаем список текстов, найденную капчу и НОВЫЙ счетчик
+        # Возвращаем None вместо пустого списка текстов для единообразия с предыдущей логикой
+        return extracted_texts if extracted_texts else None, found_captcha_src, current_messages_count
+
     except StaleElementReferenceException:
-        print("Элемент сообщения устарел (StaleElementReferenceException), пропуск чтения.")
-        return None, False
+        # Ошибка Stale может произойти и при поиске all_message_elements
+        print("[GET_MSG_ERR] Элементы сообщений устарели (StaleElementReferenceException) при общем поиске.")
+        return None, None, last_known_messages_count
     except Exception as e:
-        print(f"Непредвиденная ошибка при получении последнего сообщения: {e}")
+        print(f"[GET_MSG_ERR] Непредвиденная внешняя ошибка в get_last_message: {e}")
         traceback.print_exc()
-        return None, False
+        return None, None, last_known_messages_count
 
 def close_driver(driver):
     """Закрывает веб-драйвер."""
