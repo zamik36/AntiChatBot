@@ -139,7 +139,36 @@
         "Перевожу на специалиста – он поможет решить ваш вопрос.",
         "Зову человека. После завершения диалога оцените консультацию. Нам будет приятно! *"
       ],
-
+      "max_operator_request_attempts": 15,
+      "emulation_options": {
+        "enable_scrolling": true,
+        "enable_mouse_movement_to_elements": true,
+        "enable_random_clicks": true,
+        "enable_random_mouse_movement": true
+      }
+    },
+    "AlfaBank": {
+      "login_url": "https://web.alfabank.ru/dashboard",
+      "requires_auth": true,
+      "auth_wait_selector": "#chat-launcher-button",
+      "chat_button_selector": "#chat-launcher-button",
+      "support_chat_selector": "button[data-test-id='channel-cell--chat']",
+      "selectors": {
+        "input_field": "textarea[data-test-id='chat-textarea']",
+        "send_button": "button[data-test-id='chat-submit-button']",
+        "messages_area": "div[data-test-id^='children-']",
+        "individual_message": "div.A3N0a span.NRfVo.tjXmg",
+        "bot_message": "div.A3N0a span.NRfVo.tjXmg span.oHbJl",
+        "operator_message": "div.A3N0a span.NRfVo.tjXmg div.oHbJl p.cf2pr"
+      },
+      "operator_phrases": [
+        "^здравствуйте! меня зовут .*",
+        "меня зовут",
+        "оператор .* подключился",
+        "специалист .* на связи",
+        "Перевожу на специалиста – он поможет решить ваш вопрос.",
+        "Зову человека. После завершения диалога оцените консультацию. Нам будет приятно! *"
+      ],
       "max_operator_request_attempts": 15,
       "emulation_options": {
         "enable_scrolling": true,
