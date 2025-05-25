@@ -18,9 +18,9 @@ import traceback # Для печати трассировки ошибок
 CAPTCHA_TEXT_MARKER = "Люди не любят капчу"
 CAPTCHA_IMG_SELECTOR = 'img.VDlHi[alt="Капча"]' # Более точный селектор
 
-# Селекторы для Beeline
-# FALLBACK_TEXT_SELECTOR_BEELINE = 'p.Q5yDq' # Запасной 1: параграф - УДАЛЕНО, НЕ ИСПОЛЬЗУЕТСЯ?
-# ULTRA_FALLBACK_SELECTOR_BEELINE = 'div.AEfjo' # Запасной 2: обертка контента - УДАЛЕНО, НЕ ИСПОЛЬЗУЕТСЯ?
+# Глобальная переменная для хранения последнего отправленного сообщения
+LAST_SENT_MESSAGE = None
+
 
 def scroll_page(driver, scroll_amount=300, direction='down'):
     """Плавно прокручивает страницу вверх или вниз."""
@@ -125,37 +125,23 @@ def init_driver():
     """
     try:
         options = webdriver.ChromeOptions()
-        # Стандартные опции для локального запуска
         options.add_argument("--start-maximized")
-        # Убираем опции, которые могут мешать локальному запуску или не нужны
-        # options.add_experimental_option('excludeSwitches', ['enable-automation'])
-        # options.add_experimental_option('useAutomationExtension', False)
         options.add_argument('--log-level=3')
 
-        # --- ОПЦИИ ДЛЯ DOCKER/HEADLESS УДАЛЕНЫ ---
-        # options.add_argument("--headless=new") 
-        # options.add_argument("--no-sandbox")
-        # options.add_argument("--disable-dev-shm-usage")
-        # options.add_argument("--disable-gpu")
-        # options.add_argument("--window-size=1920x1080")
-        # options.add_argument("--disable-features=VizDisplayCompositor")
-        # options.add_argument(f"--user-data-dir=...")
-        # options.binary_location = ...
-        # -----------------------------------------
+
 
         print("Инициализация Chrome WebDriver...")
-        # Используем Service с webdriver-manager
         service = ChromeService(executable_path=ChromeDriverManager().install())
         driver = webdriver.Chrome(service=service, options=options)
         print("Драйвер Chrome инициализирован.")
         return driver
     except WebDriverException as e_wd:
-         print(f"КРИТИЧЕСКАЯ ОШИБКА WebDriverException при инициализации драйвера: {e_wd.msg.splitlines()[0]}")
-         if "session not created" in e_wd.msg:
-             print("!!! Ошибка 'session not created'. Проверьте совместимость версий Chrome и ChromeDriver.")
-         elif "cannot find chrome binary" in e_wd.msg.lower():
-             print("!!! Ошибка 'cannot find chrome binary'. Убедитесь, что Chrome установлен корректно.")
-         return None
+        print(f"КРИТИЧЕСКАЯ ОШИБКА WebDriverException при инициализации драйвера: {e_wd.msg.splitlines()[0]}")
+        if "session not created" in e_wd.msg:
+            print("!!! Ошибка 'session not created'. Проверьте совместимость версий Chrome и ChromeDriver.")
+        elif "cannot find chrome binary" in e_wd.msg.lower():
+            print("!!! Ошибка 'cannot find chrome binary'. Убедитесь, что Chrome установлен корректно.")
+        return None
     except Exception as e:
         print(f"КРИТИЧЕСКАЯ ОШИБКА инициализации драйвера: {e}")
         traceback.print_exc()
@@ -273,6 +259,7 @@ def send_message(driver, site_config, message):
     """
     Находит поле ввода, кликает, вводит сообщение ПО СИМВОЛАМ, ждет кнопку отправки и кликает.
     """
+    global LAST_SENT_MESSAGE
     try:
         input_selector = site_config.get('selectors', {}).get('input_field')
         send_button_selector = site_config.get('selectors', {}).get('send_button')
@@ -280,6 +267,9 @@ def send_message(driver, site_config, message):
         if any(not s or s == "ЗАПОЛНИ_ЭТОТ_СЕЛЕКТОР" for s in [input_selector, send_button_selector]):
             print("[SEND_MSG_ERR] КРИТИЧЕСКАЯ ОШИБКА: Селекторы поля ввода или кнопки отправки не заполнены!")
             return False
+
+        # Сохраняем отправляемое сообщение
+        LAST_SENT_MESSAGE = message
 
         wait = WebDriverWait(driver, 20)
         short_wait = WebDriverWait(driver, 5)
@@ -367,12 +357,14 @@ def get_last_message(driver, site_config, last_known_messages_count):
             - Второе значение: URL капчи (str), если обнаружена, иначе None.
             - Третье значение: Обновленное количество сообщений.
     """
+    global LAST_SENT_MESSAGE
     try:
         selectors = site_config.get('selectors', {})
         messages_area_selector = selectors.get('messages_area')
         message_block_selector = selectors.get('individual_message')
         bot_message_selector = selectors.get('bot_message')
         operator_message_selector = selectors.get('operator_message')
+        own_message_selector = selectors.get('own_message')
         text_content_selector = selectors.get('text_content_selector')
         use_specific_text_logic = bool(text_content_selector)
         author_selector = site_config.get('selectors', {}).get('message_author_selector')
@@ -405,6 +397,24 @@ def get_last_message(driver, site_config, last_known_messages_count):
         print(f"[GET_MSG] Обнаружено {len(new_messages_elements)} новых элементов сообщений.")
 
         extracted_texts = []
+        # Проверяем последнее сообщение на наличие оператора, если задан селектор
+        if operator_message_selector and new_messages_elements:
+            try:
+                last_message = new_messages_elements[-1]
+                operator_messages = last_message.find_elements(By.CSS_SELECTOR, operator_message_selector)
+                if operator_messages:
+                    print("[GET_MSG] !!! ОБНАРУЖЕНО СООБЩЕНИЕ ОПЕРАТОРА !!!")
+                    # Используем стандартную логику обработки сообщения оператора
+                    operator_text = " ".join(msg.text.strip() for msg in operator_messages if msg.text.strip())
+                    if operator_text:
+                        print(f"[GET_MSG] Текст сообщения оператора: '{operator_text[:70]}...'")
+                        extracted_texts.append(["к вам подключился"])
+                        extracted_texts.append(None)
+                        extracted_texts.append(last_known_messages_count)
+                        return extracted_texts
+            except (NoSuchElementException, StaleElementReferenceException):
+                pass
+
         found_captcha_src = None
 
         for i, message_element in enumerate(new_messages_elements):
@@ -412,18 +422,14 @@ def get_last_message(driver, site_config, last_known_messages_count):
             current_element_text = None
 
             try:
-                # Сначала пробуем найти сообщение оператора
-                if operator_message_selector:
+                # Проверяем, не является ли сообщение нашим собственным
+                if own_message_selector:
                     try:
-                        operator_messages = message_element.find_elements(By.CSS_SELECTOR, operator_message_selector)
-                        if operator_messages:
-                            operator_text = " ".join(msg.text.strip() for msg in operator_messages if msg.text.strip())
-                            if operator_text:
-                                print(f"[GET_MSG] Найдено сообщение оператора: '{operator_text[:70]}...'")
-                                current_element_text = operator_text
-                                # Если нашли сообщение оператора, пропускаем проверку на бота
-                                continue
-                    except (NoSuchElementException, StaleElementReferenceException):
+                        own_message = message_element.find_element(By.CSS_SELECTOR, own_message_selector)
+                        if own_message:
+                            print("[GET_MSG] Пропускаем собственное сообщение")
+                            continue
+                    except NoSuchElementException:
                         pass
 
                 # Если не нашли сообщение оператора, ищем сообщение бота
@@ -431,6 +437,14 @@ def get_last_message(driver, site_config, last_known_messages_count):
                     try:
                         bot_message = message_element.find_element(By.CSS_SELECTOR, bot_message_selector)
                         bot_text = bot_message.text.strip()
+                        # Проверяем, не является ли это нашим последним отправленным сообщением
+                        if LAST_SENT_MESSAGE and bot_text == LAST_SENT_MESSAGE:
+                            print("[GET_MSG] Пропускаем собственное сообщение (сравнение с кэшем)")
+                            continue
+                        # Пропускаем первое приветствие бота
+                        if bot_text and "Здравствуйте" in bot_text and "Могу о многом вам рассказать" in bot_text:
+                            print("[GET_MSG] Пропускаем первое приветствие бота")
+                            continue
                         if bot_text:
                             print(f"[GET_MSG] Найдено сообщение бота: '{bot_text[:70]}...'")
                             current_element_text = bot_text
@@ -442,6 +456,10 @@ def get_last_message(driver, site_config, last_known_messages_count):
                     try:
                         text_element = message_element.find_element(By.CSS_SELECTOR, text_content_selector)
                         found_text = text_element.text.strip()
+                        # Проверяем, не является ли это нашим последним отправленным сообщением
+                        if LAST_SENT_MESSAGE and found_text == LAST_SENT_MESSAGE:
+                            print("[GET_MSG] Пропускаем собственное сообщение (сравнение с кэшем)")
+                            continue
                         if found_text:
                             current_element_text = found_text
                     except (NoSuchElementException, TimeoutException, StaleElementReferenceException):
@@ -462,6 +480,11 @@ def get_last_message(driver, site_config, last_known_messages_count):
                         except (NoSuchElementException, StaleElementReferenceException):
                             pass
                     current_element_text = full_text.strip()
+
+                # Проверяем, не является ли это нашим последним отправленным сообщением
+                if LAST_SENT_MESSAGE and current_element_text == LAST_SENT_MESSAGE:
+                    print("[GET_MSG] Пропускаем собственное сообщение (сравнение с кэшем)")
+                    continue
 
                 if current_element_text:
                     print(f"[GET_MSG] Извлечен текст: '{current_element_text[:70]}...'")
