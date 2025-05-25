@@ -8,7 +8,6 @@ import traceback
 from . import web_automator
 import redis
 from redis.exceptions import ConnectionError, TimeoutError, RedisError
-import json # Возможно понадобится для загрузки конфига, если он не передается выше
 
 # --- Каналы Redis (общие) ---
 CAPTCHA_REQUEST_CHANNEL = "antichatbot:captcha_request"

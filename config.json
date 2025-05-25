@@ -121,6 +121,32 @@
           "response": "нет"
         }
       ]
+    },
+    "VTB": {
+      "login_url": "https://www.vtb.ru/about/contacts/",
+      "chat_button_selector": "button[data-status]",
+      "selectors": {
+        "input_field": "#webchat_chat_text_input",
+        "send_button": "button[data-test-id='webchat_chat_sendButton']",
+        "messages_area": "div[data-test-id='webchat_chatBubble']",
+        "individual_message": ".messageText-c618bbf3"
+      },
+      "operator_phrases": [
+        "^здравствуйте! меня зовут .*",
+        "меня зовут",
+        "оператор .* подключился",
+        "специалист .* на связи",
+        "Перевожу на специалиста – он поможет решить ваш вопрос.",
+        "Зову человека. После завершения диалога оцените консультацию. Нам будет приятно! *"
+      ],
+
+      "max_operator_request_attempts": 15,
+      "emulation_options": {
+        "enable_scrolling": true,
+        "enable_mouse_movement_to_elements": true,
+        "enable_random_clicks": true,
+        "enable_random_mouse_movement": true
+      }
     }
   }
 }
