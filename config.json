@@ -16,7 +16,8 @@
       "Зову человека.*",
       "Зову человека. После завершения диалога оцените консультацию. Нам будет приятно!*",
       "Вам поможет .*",
-      "Уже торопимся вам ответить: наш специалист присоединится к чату через пару минут"
+      "Уже торопимся вам ответить: наш специалист присоединится к чату через пару минут",
+      "Уже перевожу на специалиста, который поможет разобраться.*"
     ],
     "bot_indicator_phrases": [
       "время ответа специалиста может быть увеличено",
@@ -75,6 +76,29 @@
     "port": 6379
   },
   "sites": {
+    "Raiffeisen": {
+      "login_url": "https://online.raiffeisen.ru/login/main",
+      "chat_button_selector": "button.accent.color-black.ro-button.size-m",
+      "selectors": {
+        "messages_area": "div[data-testid=\"rchat-chat-screen-body\"]",
+        "individual_message": "div[data-testid=\"rchat-chat-regular-message\"]",
+        "bot_message": "div[data-testid=\"rchat-chat-regular-message\"] div[data-testid=\"rchat-chat-operator-avatar\"]",
+        "operator_message": "div[data-testid=\"rchat-chat-regular-message\"] div[data-testid=\"rchat-chat-operator-avatar\"]",
+        "own_message": "div[data-testid=\"rchat-chat-regular-message\"][direction=\"0\"]",
+        "input_field": "textarea[data-testid=\"rchat-chat-input\"]",
+        "send_button": "div[data-testid=\"rchat-chat-send-button\"]",
+        "text_content_selector": "span",
+        "message_author_selector": "div[data-testid=\"rchat-chat-operator-avatar\"]",
+        "message_time_selector": "span[data-testid=\"rchat-chat-message-time\"]"
+      },
+      "max_operator_request_attempts": 15,
+      "emulation_options": {
+        "enable_scrolling": true,
+        "enable_mouse_movement_to_elements": true,
+        "enable_random_clicks": true,
+        "enable_random_mouse_movement": true
+      }
+    },
     "Tele2": {
       "login_url": "https://msk.t2.ru/help/article/online-chat",
       "chat_button_selector": ".btn.btn-black.webim_button.webim_basic_button",
