@@ -17,7 +17,9 @@
       "Зову человека. После завершения диалога оцените консультацию. Нам будет приятно!*",
       "Вам поможет .*",
       "Уже торопимся вам ответить: наш специалист присоединится к чату через пару минут",
-      "Уже перевожу на специалиста, который поможет разобраться.*"
+      "Уже перевожу на специалиста, который поможет разобраться.*",
+      "Пожалуйста, оставайтесь в чате. Я переведу наш диалог на специалиста.",
+      "Я переведу наш диалог на оператора."
     ],
     "bot_indicator_phrases": [
       "время ответа специалиста может быть увеличено",
@@ -76,6 +78,41 @@
     "port": 6379
   },
   "sites": {
+    "RussianStandard": {
+      "login_url": "https://www.rsb.ru/faq/ask/",
+      "chat_button_selector": "div.communication-menu ul.communication-menu__list li.communication-menu__list-item a.communication-menu__list-icon.webim_button",
+      "selectors": {
+        "messages_area": "div[data-webim-region=\"messages\"]",
+        "individual_message": "li.webim-message",
+        "bot_message": "li.webim-message.webim-operator-message",
+        "operator_message": "li.webim-message.webim-operator-message",
+        "own_message": "li.webim-message.webim-visitor-message",
+        "input_field": "div.webim-message-area.webim-textarea-ext",
+        "send_button": "button.webim-action.webim-send-button",
+        "text_content_selector": "span[data-webim-model-field=\"text\"]",
+        "message_author_selector": "div.webim-avatar",
+        "message_time_selector": "span.webim-time"
+      },
+      "operator_phrases": [
+        "меня зовут",
+        "Пожалуйста, оставайтесь в чате. Я переведу наш диалог на специалиста.",
+        "оператор .* подключился",
+        "специалист .* на связи",
+        "Перевожу на специалиста – он поможет решить ваш вопрос.",
+        "Зову человека.*",
+        "Зову человека. После завершения диалога оцените консультацию. Нам будет приятно!*",
+        "Вам поможет .*",
+        "Я переведу наш диалог на оператора.",
+        "Пожалуйста, оставайтесь в чате. Я переведу наш диалог на специалиста."
+      ],
+      "max_operator_request_attempts": 15,
+      "emulation_options": {
+        "enable_scrolling": true,
+        "enable_mouse_movement_to_elements": true,
+        "enable_random_clicks": true,
+        "enable_random_mouse_movement": true
+      }
+    },
     "Raiffeisen": {
       "login_url": "https://online.raiffeisen.ru/login/main",
       "chat_button_selector": "button.accent.color-black.ro-button.size-m",
