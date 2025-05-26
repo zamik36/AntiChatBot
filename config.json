@@ -230,21 +230,34 @@
         "input_field": "textarea[data-test-id='chat-textarea']",
         "send_button": "button[data-test-id='chat-submit-button']",
         "messages_area": "div[data-test-id^='children-']",
-        "individual_message": "div.A3N0a span.NRfVo.tjXmg",
+        "individual_message": "div.mRCCR.vTyBW.K5YHk.D5IYc.LwFYN.lUj8s",
         "bot_message": "div.A3N0a span.NRfVo.tjXmg span.oHbJl",
         "operator_message": "div.A3N0a span.NRfVo.tjXmg div.oHbJl p.cf2pr.ZwSoP.pBNQy",
         "own_message": "div.A3N0a span.NRfVo.tjXmg div.oHbJl p.cf2pr[data-test-id='chat-message-text']"
       },
-      "operator_phrases": [
-        "^здравствуйте! меня зовут .*",
-        "меня зовут",
-        "оператор .* подключился",
-        "специалист .* на связи",
-        "Перевожу на специалиста – он поможет решить ваш вопрос.",
-        "Зову человека.*",
-        "Зову человека. После завершения диалога оцените консультацию. Нам будет приятно!*",
-        "Вам поможет .*"
-      ],
+      "max_operator_request_attempts": 15,
+      "emulation_options": {
+        "enable_scrolling": true,
+        "enable_mouse_movement_to_elements": true,
+        "enable_random_clicks": true,
+        "enable_random_mouse_movement": true
+      }
+    },
+    "Gazprombank": {
+      "login_url": "https://ib.online.gpb.ru/",
+      "requires_auth": true,
+      "chat_button_selector": "button.chat__sc-yq8fnc-3.dYMlfl",
+      "selectors": {
+        "messages_area": "div.chat__sc-13dwn6p-1.hrFdCz",
+        "individual_message": "div.chat__sc-wr7tt2-10.dOxeaE.chat__sc-1y2lth6-1.gkXOGt",
+        "bot_message": "div.chat__sc-wr7tt2-10 div.chat__sc-wr7tt2-5.bvMSNy div.chat__sc-wr7tt2-9.ffWCtM div.chat__sc-1ybzsjp-0.ztMbK",
+        "own_message": "div.chat__sc-wr7tt2-10.jFzIzj.chat__sc-1y2lth6-1.gkXOGt",
+        "input_field": "textarea.chat__sc-13km2he-3.oA-DuY",
+        "send_button": "button.chat__sc-8obzcl-6.fcYpC",
+        "text_content_selector": "div.chat__sc-1ybzsjp-0.ztMbK span",
+        "message_author_selector": "div.chat__sc-wr7tt2-7.eGpLfb",
+        "message_time_selector": "div.chat__sc-wr7tt2-6.cuSzfa"
+      },
       "max_operator_request_attempts": 15,
       "emulation_options": {
         "enable_scrolling": true,
