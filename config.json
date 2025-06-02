@@ -19,7 +19,8 @@
       "Уже торопимся вам ответить: наш специалист присоединится к чату через пару минут",
       "Уже перевожу на специалиста, который поможет разобраться.*",
       "Пожалуйста, оставайтесь в чате. Я переведу наш диалог на специалиста.",
-      "Я переведу наш диалог на оператора."
+      "Я переведу наш диалог на оператора.",
+      "Здравствуйте, *! Уточните, пожалуйста, ваш вопрос?"
     ],
     "bot_indicator_phrases": [
       "время ответа специалиста может быть увеличено",
@@ -230,7 +231,7 @@
         "input_field": "textarea[data-test-id='chat-textarea']",
         "send_button": "button[data-test-id='chat-submit-button']",
         "messages_area": "div[data-test-id^='children-']",
-        "individual_message": "div.mRCCR.vTyBW.K5YHk.D5IYc.LwFYN.lUj8s",
+        "individual_message": "section.v0mjG div.mRCCR[class*=\"D5IYc\"][class*=\"LwFYN\"][class*=\"lUj8s\"]",
         "bot_message": "div.A3N0a span.NRfVo.tjXmg span.oHbJl",
         "operator_message": "div.A3N0a span.NRfVo.tjXmg div.oHbJl p.cf2pr.ZwSoP.pBNQy",
         "own_message": "div.A3N0a span.NRfVo.tjXmg div.oHbJl p.cf2pr[data-test-id='chat-message-text']"

@@ -238,7 +238,7 @@ def run_chat_session(site_name, config, session_id, redis_config):
     redis_pubsub_close = None
     site_config = None
     emulation_options = None
-    last_known_messages_count = 0
+    # last_known_messages_count = 0
     operator_found = False
     gui_closed = False # Флаг, что закрытие инициировано из GUI
     attempts = 0
@@ -360,9 +360,14 @@ def run_chat_session(site_name, config, session_id, redis_config):
         # --- 5. Начало диалога ---
         publish_status("Отправка первого автоматического сообщения ('Здравствуйте!')...")
         perform_random_emulation(driver, site_config, emulation_options)
+        #a1, a2, last_known_messages_count = web_automator.get_last_message(driver, site_config, 0, site_name)
+        #print(f"ТЕКУЩЕЕ КОЛИЧЕСТВО СООБЩЕНИЙ - {last_known_messages_count}")
+        last_known_messages_count = 0
         try:
             if web_automator.send_message(driver, site_config, "Здравствуйте!"):
-                last_known_messages_count += 1 # Учитываем отправленное сообщение в локальном счетчике
+                if site_name in ["AlfaBank", "Gazprombank"]:
+                    a1, a2, last_known_messages_count = web_automator.get_last_message(driver, site_config, 0, site_name)
+                # last_known_messages_count += 1
                 publish_status("Первое сообщение 'Здравствуйте!' отправлено.")
                 time.sleep(1.5)
             else:
@@ -436,7 +441,7 @@ def run_chat_session(site_name, config, session_id, redis_config):
             print(f"[S:{session_id}] Чтение ответа из чата...")
             try:
                 # get_last_message теперь возвращает СПИСОК текстов, base64 капчи, и НОВЫЙ счетчик
-                list_of_new_texts, captcha_base64, new_count = web_automator.get_last_message(driver, site_config, last_known_messages_count)
+                list_of_new_texts, captcha_base64, new_count = web_automator.get_last_message(driver, site_config, last_known_messages_count, site_name)
                 
                 # <<< ИЗМЕНЕНИЕ: Обновляем счетчик СРАЗУ ПОСЛЕ вызова get_last_message >>>
                 # Это гарантирует, что следующая итерация начнется с правильного места,
@@ -729,3 +734,27 @@ def run_chat_session(site_name, config, session_id, redis_config):
             # publish_status("Браузер оставлен открытым.")
 
         print(f"[S:{session_id}] --- Сессия чата полностью завершена --- ")
+
+def check_operator(message, site_name):
+    """Проверяет, является ли сообщение от оператора."""
+    try:
+        # Получаем паттерны для конкретного сайта
+        site_operator_patterns = OPERATOR_PATTERNS.get(site_name, [])
+        
+        # Разбиваем сообщение на строки
+        lines = message.split('\n')
+        if not lines:
+            return False
+            
+        # Проверяем первую строку на имя оператора
+        first_line = lines[0].strip().lower()
+        
+        # Если есть специфичные паттерны для сайта, проверяем по ним
+        if site_operator_patterns:
+            return any(re.search(pattern, first_line) for pattern in site_operator_patterns)
+            
+        # Если нет специфичных паттернов, проверяем общие признаки
+        return any(pattern in first_line for pattern in ["оператор", "менеджер", "специалист", "консультант"])
+    except Exception as e:
+        print(f"[CHECK_OP_ERR] Ошибка при проверке оператора: {e}")
+        return False
