@@ -20,7 +20,10 @@
       "Уже перевожу на специалиста, который поможет разобраться.*",
       "Пожалуйста, оставайтесь в чате. Я переведу наш диалог на специалиста.",
       "Я переведу наш диалог на оператора.",
-      "Здравствуйте, *! Уточните, пожалуйста, ваш вопрос?"
+      "Здравствуйте, *! Уточните, пожалуйста, ваш вопрос?",
+      "Пожалуйста, подождите. Диалог переводится на оператора.",
+      "Перевожу на оператора. Пожалуйста, напишите свой вопрос, так он поможет быстрее. А чтобы не пропустить сообщения, проверьте, что уведомления включены",
+      "Информацию передал оператору. Пожалуйста, дождитесь ответа в чате. А чтобы его не пропустить, проверьте, что уведомления включены"
     ],
     "bot_indicator_phrases": [
       "время ответа специалиста может быть увеличено",
@@ -259,6 +262,69 @@
         "message_author_selector": "div.chat__sc-wr7tt2-7.eGpLfb",
         "message_time_selector": "div.chat__sc-wr7tt2-6.cuSzfa"
       },
+      "max_operator_request_attempts": 15,
+      "emulation_options": {
+        "enable_scrolling": true,
+        "enable_mouse_movement_to_elements": true,
+        "enable_random_clicks": true,
+        "enable_random_mouse_movement": true
+      }
+    },
+    "Rnkb": {
+      "login_url": "https://www.rncb.ru/about/contacty/",
+      "chat_button_selector": "a.webim_button[data-webim-container='Base']",
+      "selectors": {
+        "messages_area": "div[data-webim-region='messages']",
+        "individual_message": "li[data-webim-dialogue-message-type='operator'][data-webim-container='Base']",
+        "input_field": "div[data-webim-guid='message-textarea']",
+        "send_button": "button.webim-send-button[data-webim-widget-action='send']"
+      },
+      "max_operator_request_attempts": 15,
+      "emulation_options": {
+        "enable_scrolling": true,
+        "enable_mouse_movement_to_elements": true,
+        "enable_random_clicks": true,
+        "enable_random_mouse_movement": true
+      }
+    },
+    "Rostelekom": {
+      "login_url": "https://msk.rt.ru/care",
+      "chat_button_selector": "div[class='omch-root omch-theme-white rounded svelte-ibr6rv']",
+      "cookie_consent_button_selector": "button[class='rt-button rt-button-with-ripple rt-button-small rt-button-orange-border accept-button rt-button-md--is-block']",
+      "selectors": {
+        "messages_area": "div[class='omch-messages-root svelte-1ncrnhr']",
+        "individual_message": "div[class='message-holder svelte-xlw6rm message--agent tail']",
+        "input_field": "textarea[data-testid='text-field']",
+        "send_button": "button#send_message"
+      },
+      "operator_phrases":[
+        "Перевожу на оператора. Пожалуйста, напишите свой вопрос, так он поможет быстрее. А чтобы не пропустить сообщения, проверьте, что уведомления включены",
+        "Информацию передал оператору. Пожалуйста, дождитесь ответа в чате. А чтобы его не пропустить, проверьте, что уведомления включены"
+      ],
+      "max_operator_request_attempts": 15,
+      "emulation_options": {
+        "enable_scrolling": true,
+        "enable_mouse_movement_to_elements": true,
+        "enable_random_clicks": true,
+        "enable_random_mouse_movement": true
+      }
+    },
+    "Ingostrah": {
+      "login_url": "https://ingobank.ru/bank/hotline/",
+      "chat_button_selector": "div[class='webchat-banksoyuz-icon']",
+      "support_chat_selector": "a[class='webchat-banksoyuz__item open-chat']",
+      "selectors": {
+        "messages_area": "div[class='webchat-dialog-current']",
+        "individual_message": "div[class='webchat-message webchat-incoming quoted']",
+        "input_field": "textarea[class='webchat-userinput']",
+        "send_button": "div[class='webchat-message-send']"
+      },
+      "specific_bot_replies": [
+        {
+          "pattern": "*Переключить вас на оператора?",
+          "response": "Да"
+        }
+      ],
       "max_operator_request_attempts": 15,
       "emulation_options": {
         "enable_scrolling": true,
