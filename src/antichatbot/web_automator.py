@@ -190,6 +190,38 @@ def click_button_safe(driver, selector, button_name, wait_time=10):
         return False
 
 
+def click_button_ingostrah(driver, selector, button_name, wait_time=10):
+    """Ожидает, находит и кликает кнопку, обрабатывая исключения."""
+    if not selector:
+        print(f"Пропуск клика по кнопке '{button_name}': селектор не задан.")
+        return True # Считаем успешным, если селектор не нужен
+    try:
+        wait = WebDriverWait(driver, wait_time)
+        print(f"Ожидание кнопки '{button_name}' ({selector})...")
+        button = wait.until(
+            EC.element_to_be_clickable((By.XPATH, selector)),
+            message=f"Кнопка '{button_name}' ('{selector}') не найдена или не кликабельна за {wait_time} сек."
+        )
+        print(f"Кнопка '{button_name}' найдена. Попытка клика...")
+        try:
+            driver.execute_script("arguments[0].scrollIntoView(true);", button)
+            time.sleep(0.5)
+            button.click()
+        except ElementClickInterceptedException:
+            print(f"Обычный клик по '{button_name}' перехвачен, пробую JS...")
+            driver.execute_script("arguments[0].click();", button)
+        print(f"Кнопка '{button_name}' нажата.")
+        time.sleep(random.uniform(1.5, 3.0)) # Пауза после клика
+        return True
+    except TimeoutException:
+        print(f"Ошибка: Кнопка '{button_name}' ({selector}) не найдена за {wait_time} сек.")
+        # Для некоторых кнопок (куки, пост-чат) это может быть не критично
+        return False # Возвращаем False при таймауте
+    except Exception as e:
+        print(f"Ошибка при клике на кнопку '{button_name}' ({selector}): {e}")
+        return False
+    
+
 def wait_for_login_and_open_chat(driver, site_config, status_callback):
     """
     Обрабатывает до трех кнопок для открытия чата:
@@ -385,11 +417,14 @@ def get_last_message(driver, site_config, last_known_messages_count, site_name):
             if site_name == "AlfaBank":
                 all_sections = driver.find_elements(By.CSS_SELECTOR, "section.v0mjG")
                 all_message_elements = []
-                for section in all_sections:
-                    all_message_elements.extend(section.find_elements(By.CSS_SELECTOR, message_block_selector))
+                # for section in all_sections:
+                if len(all_sections > 1):
+                    all_message_elements.extend(all_sections[0].find_elements(By.CSS_SELECTOR, message_block_selector))
                     # print(f'ТЕКСТ - {section.find_elements(By.CSS_SELECTOR, message_block_selector)[-1].text}')
-
+                else:
+                    all_message_elements.extend(all_sections.find_elements(By.CSS_SELECTOR, message_block_selector))
                 # print(f'РЕАЛЬНАЯ длинна - {len(all_message_elements)}')
+                # print(f'ALL MESSAGE ELEMENT - {all_message_elements}')
             else:
                 all_message_elements = driver.find_elements(By.CSS_SELECTOR, message_block_selector)
             
@@ -421,6 +456,7 @@ def get_last_message(driver, site_config, last_known_messages_count, site_name):
                 try:
                     # Получаем полный текст сообщения и разбиваем на строки
                     full_text = message_element.text.strip()
+                    print(f'FULL TEXT - {full_text}')
                     lines = full_text.split('\n')
                     
                     # Проверяем первую строку на имя отправителя

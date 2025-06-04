@@ -442,7 +442,6 @@ def run_chat_session(site_name, config, session_id, redis_config):
             try:
                 # get_last_message теперь возвращает СПИСОК текстов, base64 капчи, и НОВЫЙ счетчик
                 list_of_new_texts, captcha_base64, new_count = web_automator.get_last_message(driver, site_config, last_known_messages_count, site_name)
-                
                 # <<< ИЗМЕНЕНИЕ: Обновляем счетчик СРАЗУ ПОСЛЕ вызова get_last_message >>>
                 # Это гарантирует, что следующая итерация начнется с правильного места,
                 # даже если на этой итерации была обработана только капча.
@@ -529,7 +528,6 @@ def run_chat_session(site_name, config, session_id, redis_config):
                 for msg_text in list_of_new_texts:
                     if msg_text is None: continue
                     cleaned_msg_lower = msg_text.strip().lower() # Очищаем и приводим к нижнему регистру
-
                     # 1. Проверка на оператора
                     if is_operator_joined(msg_text, site_config, config):
                         operator_detected_in_batch = True
@@ -538,6 +536,7 @@ def run_chat_session(site_name, config, session_id, redis_config):
 
                     # <<< НАЧАЛО НОВОЙ ЛОГИКИ: Проверка specific_bot_replies >>>
                     specific_replies = site_config.get("specific_bot_replies", [])
+                    ingostrah_selector = site_config.get("ingostrah_button")
                     found_specific_question = False
                     for reply_config in specific_replies:
                         pattern = reply_config.get("pattern")
@@ -550,16 +549,24 @@ def run_chat_session(site_name, config, session_id, redis_config):
                                     publish_status(f"Обнаружен спец. вопрос. Отправка '{response_to_send}'...")
                                     perform_random_emulation(driver, site_config, emulation_options)
                                     try:
-                                        if web_automator.send_message(driver, site_config, response_to_send):
+                                        if site_name == "Ingostrah":
+                                            web_automator.click_button_ingostrah(driver, ingostrah_selector, "Да")
                                             publish_status(f"Ответ '{response_to_send}' отправлен.")
                                             time.sleep(1.5)
                                             sent_specific_bot_response_this_iter = True
                                             found_specific_question = True # Устанавливаем флаг
                                             break # Выходим из цикла по specific_replies
                                         else:
-                                            publish_status(f"Ошибка отправки ответа '{response_to_send}'. Пауза 5 сек...")
-                                            print(f"[S:{session_id}] ### Ошибка отправки ответа '{response_to_send}'.")
-                                            time.sleep(5)
+                                            if web_automator.send_message(driver, site_config, response_to_send):
+                                                publish_status(f"Ответ '{response_to_send}' отправлен.")
+                                                time.sleep(1.5)
+                                                sent_specific_bot_response_this_iter = True
+                                                found_specific_question = True # Устанавливаем флаг
+                                                break # Выходим из цикла по specific_replies
+                                            else:
+                                                publish_status(f"Ошибка отправки ответа '{response_to_send}'. Пауза 5 сек...")
+                                                print(f"[S:{session_id}] ### Ошибка отправки ответа '{response_to_send}'.")
+                                                time.sleep(5)
                                     except Exception as send_exc:
                                         publish_status(f"КРИТИЧЕСКАЯ ОШИБКА при отправке ответа '{response_to_send}': {send_exc}")
                                         print(f"[S:{session_id}] ### Ошибка selenium при отправке ответа '{response_to_send}': {send_exc}")

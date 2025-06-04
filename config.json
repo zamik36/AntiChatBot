@@ -23,7 +23,8 @@
       "Здравствуйте, *! Уточните, пожалуйста, ваш вопрос?",
       "Пожалуйста, подождите. Диалог переводится на оператора.",
       "Перевожу на оператора. Пожалуйста, напишите свой вопрос, так он поможет быстрее. А чтобы не пропустить сообщения, проверьте, что уведомления включены",
-      "Информацию передал оператору. Пожалуйста, дождитесь ответа в чате. А чтобы его не пропустить, проверьте, что уведомления включены"
+      "Информацию передал оператору. Пожалуйста, дождитесь ответа в чате. А чтобы его не пропустить, проверьте, что уведомления включены",
+      "Идёт поиск свободного оператора ..."
     ],
     "bot_indicator_phrases": [
       "время ответа специалиста может быть увеличено",
@@ -256,7 +257,7 @@
         "individual_message": "div.chat__sc-wr7tt2-10.dOxeaE.chat__sc-1y2lth6-1.gkXOGt",
         "bot_message": "div.chat__sc-wr7tt2-10 div.chat__sc-wr7tt2-5.bvMSNy div.chat__sc-wr7tt2-9.ffWCtM div.chat__sc-1ybzsjp-0.ztMbK",
         "own_message": "div.chat__sc-wr7tt2-10.jFzIzj.chat__sc-1y2lth6-1.gkXOGt",
-        "input_field": "textarea.chat__sc-13km2he-3.oA-DuY",
+        "input_field": "textarea.chat__sc-13km2he-3",
         "send_button": "button.chat__sc-8obzcl-6.fcYpC",
         "text_content_selector": "div.chat__sc-1ybzsjp-0.ztMbK span",
         "message_author_selector": "div.chat__sc-wr7tt2-7.eGpLfb",
@@ -313,6 +314,7 @@
       "login_url": "https://ingobank.ru/bank/hotline/",
       "chat_button_selector": "div[class='webchat-banksoyuz-icon']",
       "support_chat_selector": "a[class='webchat-banksoyuz__item open-chat']",
+      "ingostrah_button": "//div[@class='webchat-message__actions']//div[@data-test-id='webchat-action' and normalize-space()='Да →']",
       "selectors": {
         "messages_area": "div[class='webchat-dialog-current']",
         "individual_message": "div[class='webchat-message webchat-incoming quoted']",
@@ -321,7 +323,7 @@
       },
       "specific_bot_replies": [
         {
-          "pattern": "*Переключить вас на оператора?",
+          "pattern": "Я пока не знаю ответ на этот вопрос 🤔\n\nПереключить вас на оператора?",
           "response": "Да"
         }
       ],
